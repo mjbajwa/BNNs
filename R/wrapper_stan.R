@@ -2,12 +2,16 @@ library(rstan)
 library(dplyr)
 library(stringr)
 library(ggplot2)
+library(tidyr)
+library(gridExtra)
+set.seed(10)
 
-# Architecture Design
+# Constants
 
-G <- c(8) # number of neurons
+OUTPUT_PATH <- "./output/"
+G <- c(8) # number of neurons per layer.. e.g: c(8, 7) has two hidden layers with 8 and 7 hidden units respectively
 
-# Generate Data -----------------------------------------------------------
+# Load Data -----------------------------------------------------------
 
 df <- data.frame(read.table("./fbm_logs/rdata", header = FALSE))
 colnames(df) <- c("X", "Y")
@@ -48,24 +52,125 @@ fit <- stan(
   iter = 2000, 
   cores = 6, 
   refresh = 1,
-  verbose = TRUE
+  verbose = TRUE,
+  seed = 1,
 )
 
-# Fit Diagnostics ---------------------------------------------------------
+# Create dir to save outputs of the run
 
-# summary(fit)
-# rstan::plot(fit)
-# rstan::stan_trace(fit)
-# rstan::stan_plot(fit)
-rstan::stan_rhat(fit)
-# rstan::stan_dens(fit, separate_chains = T)
+folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
+path <- str_c(OUTPUT_PATH, folder_name)
+dir.create(path)
+
+# Utility Functions -------------------------------------------------------
+
+# TODO: Port to utils.R
+
+parse_stan_vars <- function(vars, stan_pattern="W", index_dim=3){
+  
+  #' Parses stan variables
+  
+  temp <- str_replace(vars, str_c(stan_pattern, "\\["), "") %>% 
+    str_replace("\\]", "") %>% 
+    str_split(",", n = index_dim) %>%
+    lapply(function(x){c(x)})
+  
+  parsed_outputs <- matrix(data = 0, nrow=length(temp), ncol=index_dim)
+  
+  for(i in 1:length(temp)){
+    parsed_outputs[i,] <- as.numeric(temp[i] %>% unlist())
+  }
+  
+  df_parsed <- as_tibble(parsed_outputs)
+  names(df_parsed) <- c("layer", "incoming_neuron", "outgoing_neuron")
+  df_parsed <- df_parsed %>% 
+    mutate(stan_var_name = vars) %>% 
+    select(stan_var_name, everything())
+  
+  return(df_parsed) 
+  
+}
+
+markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=2000){
+  
+  #' Example input values
+  
+  # n_chains = 4
+  # burn_in = 1000
+  # iters = 2000
+  # var = "W[1,1,1]"
+  
+  # Create empty dataframe to save results
+  
+  df_chains <- as_tibble(matrix(data=0, nrow = 2000, ncol=4))
+  names(df_chains) <- as.vector(unlist(lapply(as.list(1:n_chains), function(x){paste("chain_", x, sep="")})))
+  
+  # Loop through each chain and extract the samples
+  
+  for(chain in 1:n_chains){
+    
+    temp <- stan_fit@sim$samples[[chain]]
+    parameter_samples <- temp[[var]]
+    
+    df_chains[as.character(paste("chain_", chain, sep=""))] <- parameter_samples
+    
+  }
+  
+  # Calculate across chain averages (TODO: might also want to do within chain averages for R_hat)
+  
+  df_chains["time_index"] = 1:nrow(df_chains)
+  
+  df_chain_summary <- df_chains %>% 
+    tidyr::pivot_longer(!time_index) %>% 
+    group_by(time_index) %>%
+    summarize(mean_chains = mean(value),
+              sdev_chains = sd(value))
+  
+  # Join the summary with final
+  
+  df_chains["var"] = var
+  df_chains["stationary"] = ifelse(1:nrow(df_chains) > burn_in, T, F)
+  
+  df_chains <- df_chains %>% 
+    left_join(df_chain_summary, by = "time_index")
+  
+  return(df_chains)
+  
+}
+
+mcmc_trace_plot <- function(df_mcmc_param, var, burn_in){
+  
+  burn_in = 1000
+  var = "W[2,1,1]"
+  
+  df_plot <- df_mcmc_param %>% 
+    select(time_index, contains("chain_")) %>% 
+    tidyr::pivot_longer(!time_index, names_to = "chain") %>% 
+    mutate(stationary = ifelse(time_index > 1000, T, F))
+  
+  ggplot(df_plot) +
+    geom_point(aes(x = time_index, y = value, color = chain, alpha = stationary), size=0.5) + 
+    scale_alpha_manual(values=c(0.05, 1)) + 
+    geom_vline(xintercept = burn_in,
+               linetype=2) + 
+    theme_bw() + 
+    ggtitle(str_c(unique(df_mcmc_param$var))) + 
+    xlab("") + 
+    ylab("") + 
+    theme(text=element_text(size=16),
+          legend.position = "none")
+  
+}
 
 # Postprocessing -------------------------------------------------------------
 
-# Extract certain properties from the fit object
+# Extract summary table from the fit object
 
 stan_summary <- summary(fit)
 all_parameters <- attr(stan_summary$summary, "dimnames")[[1]]
+df_stan_summary <- stan_summary$summary %>% 
+  as_tibble() %>% 
+  mutate(stan_var_name = all_parameters)
 
 # Weight Parameter Names
 
@@ -81,74 +186,143 @@ hidden_biases <- all_parameters[stringr::str_detect(all_parameters, "B")]
 y_train_names <- all_parameters[str_detect(all_parameters, "y_train_pred")]
 y_test_names <- all_parameters[str_detect(all_parameters, "y_test_pred")]
 
-# Group Specific Plots ----------------------------------------------------
+# Prediction of training and test set ----------------------------------------------------
 
-rstan::stan_trace(fit, pars = hidden_weights[10:15])
-rstan::stan_dens(fit,  pars = hidden_weights[10:15], separate_chains = TRUE)
+df_x_train <- as_tibble(X_train) %>% 
+  rename_all(function(x) paste0("X_", x))
 
-rstan::get_posterior_mean(fit)
+df_x_test <- as_tibble(X_test) %>% 
+  rename_all(function(x) paste0("X_", x))
 
-# Prediction of test set
+#' Assess predictive distributions - is poor sampling having an effect? 
 
-df_post_train <- stan_summary$summary %>% 
-  as_tibble() %>% 
-  mutate(variable = all_parameters) %>% 
-  filter(str_detect(variable, "y_train_pred")) %>% 
-  mutate(test_mean = y_train) %>% 
-  select(variable, mean, test_mean, everything())
+df_post_train <- df_stan_summary %>% 
+  filter(str_detect(stan_var_name, "y_train_pred")) %>% 
+  mutate(actual = y_train) %>% 
+  select(stan_var_name, mean, actual, everything()) %>% 
+  mutate(label = "train") %>% 
+  bind_cols(df_x_train)
 
-df_post_test <- stan_summary$summary %>% 
-  as_tibble() %>% 
-  mutate(variable = all_parameters) %>% 
-  filter(str_detect(variable, "y_test_pred")) %>% 
-  mutate(test_mean = y_test) %>% 
-  select(variable, mean, test_mean, everything())
+df_post_test <- df_stan_summary %>% 
+  filter(str_detect(stan_var_name, "y_test_pred")) %>% 
+  mutate(actual = y_test) %>% 
+  select(stan_var_name, mean, actual, everything()) %>% 
+  mutate(label = "test") %>% 
+  bind_cols(df_x_test)
 
-ggplot(df_post_train %>% filter(mean < 5)) + 
-  # geom_errorbar(aes(x = mean, ymin = test_mean - sd, ymax = test_mean + sd), alpha=0.3) + 
-  geom_point(aes(x = mean, y = test_mean), color="red2", alpha=0.5, size = 2) + 
+df_post_preds <- df_post_train %>% 
+  bind_rows(df_post_test)
+
+pred_actual_plot <- ggplot(df_post_preds) + 
+  geom_point(aes(x = actual, y = mean, color=label), alpha = 0.5, size = 2) + 
+  geom_linerange(aes(x = actual, ymin =`2.5%`, ymax= `97.5%`), alpha = 0.5) + 
+  scale_color_manual(values = c("red2", "green3")) + 
   geom_abline(slope=1,intercept=0) + 
   theme_bw() + 
-  xlab("Predicted") + 
-  ylab("Actual") + 
-  theme(text = element_text(size=16))
+  xlab("Actual") + 
+  ylab("Predicted") + 
+  theme(text = element_text(size=16)) + 
+  facet_wrap(label~., scales = "free_x") + 
+  ggtitle("Predicted vs. Actual")
 
-ggplot(df_post_train %>% filter(mean < 5)) + 
-  # geom_errorbar(aes(x = mean, ymin = test_mean - sd, ymax = test_mean + sd), alpha=0.3) + 
-  geom_point(aes(x = mean, y = test_mean), color="red2", alpha=0.5, size = 2) + 
-  geom_abline(slope=1,intercept=0) + 
+ggsave(str_c(path, "/predicted_vs_actual.png"), 
+       pred_actual_plot,
+       width = 11, 
+       height = 8)
+
+yx_filtered_plot <- ggplot(df_post_preds %>% filter(X_V1 > -2.2)) + 
+  geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
+  geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
+  scale_color_manual(values = c("red2", "green3")) + 
   theme_bw() + 
-  xlab("Predicted") + 
-  ylab("Actual") + 
-  theme(text = element_text(size=16))
+  xlab("X") + 
+  ylab("Y (Predicted)") + 
+  theme(text = element_text(size=16)) + 
+  ggtitle("Y vs. X", subtitle = "Filtered X < -2.2")
 
-# Text Parsing ---
+ggsave(str_c(path, "/y_vs_x_filtered.png"), 
+       yx_filtered_plot,
+       width = 11, 
+       height = 8)
 
-parse_stan_vars <- function(vars, stan_pattern="W", index_dim=3){
+yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) + 
+  geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
+  geom_point(aes(x = X_V1, y = actual, color=label), alpha = 0.5, size = 2) + 
+  scale_color_manual(values = c("red2", "green4")) + 
+  scale_fill_manual(values = c("red2", "green4")) + 
+  theme_bw() + 
+  xlab("X") + 
+  ylab("Y (Predicted)") + 
+  theme(text = element_text(size=16)) + 
+  facet_wrap(label~., scales = "free") + 
+  ggtitle("Y vs. X")
 
-  temp <- str_replace(vars, str_c(stan_pattern, "\\["), "") %>% 
-    str_replace("\\]", "") %>% 
-    str_split(",", n = index_dim) %>%
-    lapply(function(x){c(x)})
-  
-  parsed_outputs <- matrix(data = 0, nrow=length(temp), ncol=index_dim)
-  
-  for(i in 1:length(temp)){
-    parsed_outputs[i,] <- as.numeric(temp[i] %>% unlist())
-  }
-  
-  df_parsed <- as_tibble(parsed_outputs)
-  names(df_parsed) <- c("layer", "incoming_neuron", "outgoing_neuron")
-  df_parsed <- df_parsed %>% 
-    mutate(stan_name = vars) %>% 
-    select(stan_name, everything())
-  
-  return(df_parsed) 
-  
+ggsave(str_c(path, "/y_vs_x_unfiltered.png"), 
+       yx_unfiltered_plot,
+       width = 11, 
+       height = 8)
+
+ggplot(df_post_preds) + 
+  geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
+  geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
+  geom_point(aes(x = X_V1, y = actual), color="black", alpha = 0.1, size = 1) + 
+  scale_color_manual(values = c("red2", "green3")) + 
+  theme_bw() + 
+  xlab("X") + 
+  ylab("Y (Predicted)") + 
+  theme(text = element_text(size=16)) + 
+  facet_wrap(label~., scales = "free") + 
+  ggtitle("Y vs. X", subtitle = "No filtered points")
+
+df_post_preds$Rhat %>% hist(col = "red2")
+
+# Extremely Paradoxical.... Why do the predictions feel good but the actual parameters end up diverging?
+
+# Trace Plot Analysis of MCMC for weights/biases ---------------------------------------------
+
+# Parsing the distribution of weights in a clean way ---
+
+weights_parsed <- parse_stan_vars(hidden_weights, "W", 3)
+biases_parsed <- parse_stan_vars(hidden_biases, "B", 2)
+
+# Weights analysis
+
+df_weights_posterior <- weights_parsed %>% 
+  left_join(df_stan_summary, by = "stan_var_name")
+
+df_biases_posterior <- biases_parsed %>% 
+  left_join(df_stan_summary, by = "stan_var_name")
+
+# Parse out important weight parameters 
+# TODO: Do this in a more generalizable way
+
+layer_1_weights <- df_weights_posterior %>% 
+  filter(layer == 1,
+         incoming_neuron == 1) %>% 
+  pull(stan_var_name)
+
+layer_2_weights <- df_weights_posterior %>% 
+  filter(layer == 2,
+         outgoing_neuron == 1) %>% 
+  pull(stan_var_name)
+
+desired_weight_vars <- c(layer_1_weights, layer_2_weights)
+weight_trace_plots = list()
+
+for(i in 1:length(desired_weight_vars)){
+  var <- desired_weight_vars[i]
+  weight_trace_plots[[i]] <- markov_chain_samples(fit, var) %>% 
+    mcmc_trace_plot(var, burn_in = 1000)
 }
 
-parse_stan_vars(hidden_weights, "W", 3)
-parse_stan_vars(hidden_biases, "B", 2)
-parse_stan_vars(y_names, "y_test_pred", 1)
+# Save all weight plots
 
+png(str_c(path, "/weights_ih.png"), width = 14, height = 8, units = "in", res=300)
+do.call("grid.arrange", c(weight_trace_plots[1:8], 
+                          ncol = floor(sqrt(length(weight_trace_plots)))))
+dev.off()
 
+png(str_c(path, "/weights_ho.png"), width = 14, height = 8, units = "in", res=300)
+do.call("grid.arrange", c(weight_trace_plots[9:16], 
+        ncol = floor(sqrt(length(weight_trace_plots)))))
+dev.off()

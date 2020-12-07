@@ -76,11 +76,11 @@ model {
   for(l in 1:(h+1)){
     if(l == 1){
       for(g in 1:K){
-        W[l][g, l] ~ normal(0, 0.5); 
+        W[l][g, l] ~ normal(0, 1); 
       }
     } else {
       for(g in 1:max(max(G), K)) {
-        W[l][g, l] ~ normal(0, 0.5);
+        W[l][g, l] ~ normal(0, 1);
       }
     }
   }
@@ -90,11 +90,11 @@ model {
   for(l in 1:(h+1)){
     if(l == 1){
       for(g in 1:K){
-        B[g, l] ~ normal(0, 0.5); 
+        B[g, l] ~ normal(0, 1); 
       }
     } else {
       for(g in 1:max(G)) {
-        B[g, l] ~ normal(0, 0.5);
+        B[g, l] ~ normal(0, 1);
       }
     }
   }
