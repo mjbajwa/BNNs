@@ -79,7 +79,7 @@ model {
         W[l][g, l] ~ normal(0, 1); 
       }
     } else {
-      for(g in 1:max(max(G), K)) {
+      for(g in 1:G[l-1]) { // max(max(G), K)
         W[l][g, l] ~ normal(0, 1);
       }
     }
