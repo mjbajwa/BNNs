@@ -89,7 +89,7 @@ model {
   
   for(l in 1:(h+1)){
     if(l == 1){
-      for(g in 1:K){
+      for(g in 1:G[l]){
         B[g, l] ~ normal(0, 1); 
       }
     } else {
