@@ -13,18 +13,27 @@ data {
   matrix[N_test, K] X_test; // Input matrix
   
   # Hyperpriors on the Weights!
+
+
 }
 
 parameters {
   
-  // Weights
+  // Weights (W)
   matrix[max(max(G), K), max(max(G), K)] W[h+1]; // Hidden layer weight matrices -- H+1 size because of additional layer for outputs 
   
-  // Intercepts
+  // Intercepts (b)
   matrix[max(G), h+1] B; // matrix for hidden layer intercepts
   
   // Variance of likelihood
   real<lower=0> sigma;
+  
+  // Hyperparameter on weights of each layer
+  // vector[h] W_sdev;
+  
+  // Hyperparameters for gamma priors on the variance of each group
+  // vector[h] shape_W_sdev; 
+  // vector[h] precision_W_sdev;
   
 }
 
@@ -78,11 +87,15 @@ model {
   for(l in 1:(h+1)){
     if(l == 1){
       for(g in 1:K){
-        W[l][g, l] ~ normal(0, 1); 
+        for(d in 1:cols(W[l])){
+          W[l][g, d] ~ normal(0, 1); 
+        }
       }
     } else {
-      for(g in 1:G[l-1]) { // max(max(G), K)
-        W[l][g, l] ~ normal(0, 1);
+      for(g in 1:G[l-1]) { // max(max(G), K) --- this sets it to the limit of the number of units that we want to define.
+        for(d in 1:cols(W[l])){
+          W[l][g, d] ~ normal(0, 1); 
+        }
       }
     }
   }
@@ -122,7 +135,6 @@ generated quantities {
         // calculate for layer = 2 onwards
         for(g in 1:G[l]){
           z_test[n][g,l] = tanh(sum(z_test[n][1:G[l-1], l-1].*W[l][1:G[l-1], g]) + B[g, l]); // 
-          
         }
         
       }

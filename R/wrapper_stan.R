@@ -45,7 +45,7 @@ data = list(
 # Call Stan ---------------------------------------------------------------
 
 fit <- stan(
-  file = "stan/BNN.stan",  # Stan program
+  file = "stan/BNN_hparams.stan",  # Stan program
   data = data,    # named list of data
   chains = 4, 
   warmup = 1000, 
@@ -317,12 +317,12 @@ for(i in 1:length(desired_weight_vars)){
 
 # Save all weight plots
 
-png(str_c(path, "/weights_ih.png"), width = 14, height = 8, units = "in", res=300)
+png(str_c(path, "/weights_ih.png"), width = 14, height = 8, units = "in", res=50)
 do.call("grid.arrange", c(weight_trace_plots[1:8], 
                           ncol = floor(sqrt(length(weight_trace_plots)))))
 dev.off()
 
-png(str_c(path, "/weights_ho.png"), width = 14, height = 8, units = "in", res=300)
+png(str_c(path, "/weights_ho.png"), width = 14, height = 8, units = "in", res=50)
 do.call("grid.arrange", c(weight_trace_plots[9:16], 
         ncol = floor(sqrt(length(weight_trace_plots)))))
 dev.off()
