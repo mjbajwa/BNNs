@@ -99,7 +99,7 @@ model {
         }
     } else {
       for(g_in in 1:G[l-1]) { // All hidden layers not connected to input/output
-        for(g_out in 1:G[l-1]){
+        for(g_out in 1:G[l]){
           W[l][g_in, g_out] ~ normal(0, 1); 
         }
       }
@@ -108,18 +108,18 @@ model {
   
   // Priors on intercepts (USEFUL intercepts only for each column of the B matrix)
   
-  // for(l in 1:(h+1)){
-  //   if (l == h+1){ 
-  //     // For the output Layer -- only one bias term matters
-  //       B[1, l] ~ normal(0, 1);
-  //   } else { 
-  //     // For all other layers, index only on useful weights
-  //     for(g in 1:G[l]) {
-  //       B[g, l] ~ normal(0, 1);
-  //     }
-  //   }
-  // }
-  // 
+  for(l in 1:(h+1)){
+    if (l == h+1){
+      // For the output Layer -- only one bias term matters
+        B[1, l] ~ normal(0, 1);
+    } else {
+      // For all other layers, index only on useful weights
+      for(g in 1:G[l]) {
+        B[g, l] ~ normal(0, 1);
+      }
+    }
+  }
+
   // // ****** Priors on Non-Useful Weights ****** // Consider removing for simplicity
   // 
   // // Weights
