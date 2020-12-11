@@ -3,14 +3,14 @@
 // TODO: multiple outputs not yet supported.
 
 data {
-  int<lower=0> N; // Input Data rows
-  int<lower=0> K; // input features
-  int<lower=1> h; // number of hidden layers 
-  int G[h]; // number of neurons per layer
+  int<lower=0> N; // Input Data examples
+  int<lower=0> K; // Input features
+  int<lower=1> h; // Number of hidden layers 
+  int G[h]; // Number of neurons per layer
   matrix[N, K] X_train; // Input matrix
   vector[N] y_train;    // Target vector
-  int<lower=0> N_test; // number of test variables
-  matrix[N_test, K] X_test; // Input matrix
+  int<lower=0> N_test; // Number of test examples
+  matrix[N_test, K] X_test; // Input matrix for test examples
   
   # Hyperpriors on the Weights!
 
@@ -82,37 +82,82 @@ model {
   
   sigma ~ cauchy(0, 1);
   
-  // Priors on inputs (Control hyperparameters of normal using inputs)
+  // ****** Priors on Useful Weights ******
+  
+  // Priors on weights (USEFUL weights only)
   
   for(l in 1:(h+1)){
-    if(l == 1){
-      for(g in 1:K){
-        for(d in 1:cols(W[l])){
-          W[l][g, d] ~ normal(0, 1); 
+    if(l == 1){ // Hidden layer connected to Input Layer
+      for(g_in in 1:K){
+        for(g_out in 1:G[l]){
+          W[l][g_in, g_out] ~ normal(0, 1); 
         }
       }
+    } else if (l == h+1) { // Output Layer 
+      for(g_in in 1:G[l-1]) { 
+          W[l][g_in, 1] ~ normal(0, 1); 
+        }
     } else {
-      for(g in 1:G[l-1]) { // max(max(G), K) --- this sets it to the limit of the number of units that we want to define.
-        for(d in 1:cols(W[l])){
-          W[l][g, d] ~ normal(0, 1); 
+      for(g_in in 1:G[l-1]) { // All hidden layers not connected to input/output
+        for(g_out in 1:G[l-1]){
+          W[l][g_in, g_out] ~ normal(0, 1); 
         }
       }
     }
   }
   
-  // Intercepts
+  // Priors on intercepts (USEFUL intercepts only for each column of the B matrix)
   
-  for(l in 1:(h+1)){
-    if(l == 1){
-      for(g in 1:G[l]){
-        B[g, l] ~ normal(0, 1); 
-      }
-    } else {
-      for(g in 1:max(G)) {
-        B[g, l] ~ normal(0, 1);
-      }
-    }
-  }
+  // for(l in 1:(h+1)){
+  //   if (l == h+1){ 
+  //     // For the output Layer -- only one bias term matters
+  //       B[1, l] ~ normal(0, 1);
+  //   } else { 
+  //     // For all other layers, index only on useful weights
+  //     for(g in 1:G[l]) {
+  //       B[g, l] ~ normal(0, 1);
+  //     }
+  //   }
+  // }
+  // 
+  // // ****** Priors on Non-Useful Weights ****** // Consider removing for simplicity
+  // 
+  // // Weights
+  // 
+  // for(l in 1:(h+1)){
+  //   if(l == 1){
+  //     for(g_in in (K+1):rows(W[l])){
+  //       for(g_out in (G[l]+1):cols(W[l])){
+  //         W[l][g_in, g_out] ~ uniform(-2, 2);
+  //       }
+  //     }
+  //   } else if (l == h+1){
+  //     for(g_in in (G[l-1]+1):rows(W[l])) { 
+  //         W[l][g_in, 1] ~ uniform(-2, 2); 
+  //       }
+  //   } else {
+  //     for(g_in in (G[l-1]+1):rows(W[l])) {
+  //       for(g_out in (G[l]+1):cols(W[l])){
+  //         W[l][g_in, g_out] ~ uniform(-2, 2);
+  //       }
+  //     }
+  //   }
+  // }
+  // 
+  // // Intercepts
+  // 
+  // for(l in 1:(h+1)){
+  //   if (l == h+1){ 
+  //     for(g in 2:rows(B)){
+  //       B[g, l] ~ uniform(-2, 2);
+  //     }
+  //   } else { 
+  //     // For all other layers, index only on useful weights
+  //     for(g in (G[l]+1):rows(B)) {
+  //       B[g, l] ~ uniform(-2, 2);
+  //     }
+  //   }
+  // }
     
 }
 
