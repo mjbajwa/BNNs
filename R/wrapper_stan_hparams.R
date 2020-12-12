@@ -9,7 +9,11 @@ set.seed(10)
 # Constants
 
 OUTPUT_PATH <- "./output/"
-G <- c(8, 3, 1, 1) # number of neurons per layer.. e.g: c(8, 7) has two hidden layers with 8 and 7 hidden units respectively
+G <- c(8) # number of neurons per layer.. e.g: c(8, 7) has two hidden layers with 8 and 7 hidden units respectively
+W_gamma_shape <- c(0.5, 0.5)
+W_gamma_rate <- c(0.3, 0.3)
+B_gamma_shape <- c(0.5, 0.5)
+B_gamma_rate <- c(0.3, 0.3)
 
 # Load Data -----------------------------------------------------------
 
@@ -38,7 +42,11 @@ data = list(
   X_train = X_train,
   y_train = y_train,
   N_test = N_test,
-  X_test = X_test
+  X_test = X_test,
+  W_gamma_shape = W_gamma_shape,
+  W_gamma_rate = W_gamma_rate,
+  B_gamma_shape = B_gamma_shape, 
+  B_gamma_rate = B_gamma_rate
 )
 
 # Call Stan ---------------------------------------------------------------
@@ -174,11 +182,12 @@ df_stan_summary <- stan_summary$summary %>%
 # Weight Parameter Names
 
 hidden_weights <- all_parameters[stringr::str_detect(all_parameters, "W") & 
-                 !stringr::str_detect(all_parameters, "W_initial|W_final")]
+                 !stringr::str_detect(all_parameters, "W_gamma|W_sdev|W_precision")]
 
 # Biases Parameter Names
 
-hidden_biases <- all_parameters[stringr::str_detect(all_parameters, "B")]
+hidden_biases <- all_parameters[stringr::str_detect(all_parameters, "B") & 
+                                !stringr::str_detect(all_parameters, "B_gamma|B_sdev|B_precision")]
 
 # Predicted Values of test set
 
@@ -261,17 +270,17 @@ ggsave(str_c(path, "/y_vs_x_unfiltered.png"),
        width = 11, 
        height = 8)
 
-ggplot(df_post_preds) + 
-  geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
-  geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
-  geom_point(aes(x = X_V1, y = actual), color="black", alpha = 0.1, size = 1) + 
-  scale_color_manual(values = c("red2", "green3")) + 
-  theme_bw() + 
-  xlab("X") + 
-  ylab("Y (Predicted)") + 
-  theme(text = element_text(size=16)) + 
-  facet_wrap(label~., scales = "free") + 
-  ggtitle("Y vs. X", subtitle = "No filtered points")
+# ggplot(df_post_preds) + 
+#   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
+#   geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
+#   geom_point(aes(x = X_V1, y = actual), color="black", alpha = 0.1, size = 1) + 
+#   scale_color_manual(values = c("red2", "green3")) + 
+#   theme_bw() + 
+#   xlab("X") + 
+#   ylab("Y (Predicted)") + 
+#   theme(text = element_text(size=16)) + 
+#   facet_wrap(label~., scales = "free") + 
+#   ggtitle("Y vs. X", subtitle = "No filtered points")
 
 df_post_preds$Rhat %>% hist(col = "red2")
 
