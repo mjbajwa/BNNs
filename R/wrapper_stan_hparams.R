@@ -1,19 +1,57 @@
+# Load Libraries ----------------------------------------------------------
+
 library(rstan)
 library(dplyr)
 library(stringr)
 library(ggplot2)
 library(tidyr)
 library(gridExtra)
+
 set.seed(10)
 
-# Constants
+# User Inputs -------------------------------------------------------------
 
-OUTPUT_PATH <- "./output/"
-G <- c(8) # number of neurons per layer.. e.g: c(8, 7) has two hidden layers with 8 and 7 hidden units respectively
-W_gamma_shape <- c(0.5, 0.5)
-W_gamma_rate <- c(0.3, 0.3)
-B_gamma_shape <- c(0.5, 0.5)
-B_gamma_rate <- c(0.3, 0.3)
+OUTPUT_PATH <- "./output/DEBUG/"
+
+# number of neurons per hidden layer.. e.g: c(8, 7) has two hidden layers with 8 and 7 hidden units respectively
+G <- c(8) 
+HIERARCHICAL_FLAG <- 1
+
+# FBM Parametrization
+
+FBM_W <- list("GAMMA_WIDTH" = c(0.05, 0.05),
+              "GAMMA_ALPHA" = c(0.5, 0.5))
+
+FBM_B <- list("GAMMA_WIDTH" = c(0.05, 0.05),
+              "GAMMA_ALPHA" = c(0.5, 0.5))
+
+# FBM to Stan Utils -------------------------------------------------------
+
+fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha){
+  
+  # TODO: check with Prof Neal this re-parametrization is correct.
+  
+  mean_precision = 1/(fbm_width^2)
+  stan_alpha = fbm_alpha/2
+  stan_beta = stan_alpha/mean_precision
+  
+  output = list("STAN_ALPHA" = stan_alpha,
+                "STAN_BETA" = stan_beta)
+  
+  return(output)
+  
+}
+
+# Convert FBM parameterization to STAN parametrization ---------------
+
+# Shape = Alpha, Scale = Beta
+
+W_STAN <- fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH, FBM_W$GAMMA_ALPHA)
+B_STAN <- fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
+W_gamma_shape <- W_STAN$STAN_ALPHA
+W_gamma_scale <- W_STAN$STAN_BETA
+B_gamma_shape <- B_STAN$STAN_ALPHA
+B_gamma_scale <- B_STAN$STAN_BETA
 
 # Load Data -----------------------------------------------------------
 
@@ -24,7 +62,7 @@ all_idx <- 1:nrow(df)
 train_idx <- 1:100
 test_idx <- all_idx[!(all_idx %in% train_idx)]
 
-# Data preprocessing
+# Data pre-processing
 
 X_train <- matrix(df[train_idx, names(df)[!str_detect(string = names(df), target_col)]])  
 y_train <- as.vector(matrix(df[train_idx, target_col]))
@@ -44,15 +82,16 @@ data = list(
   N_test = N_test,
   X_test = X_test,
   W_gamma_shape = W_gamma_shape,
-  W_gamma_rate = W_gamma_rate,
-  B_gamma_shape = B_gamma_shape, 
-  B_gamma_rate = B_gamma_rate
+  W_gamma_scale = W_gamma_scale,
+  B_gamma_shape = B_gamma_shape,
+  B_gamma_scale = B_gamma_scale,
+  use_hierarchical = HIERARCHICAL_FLAG
 )
 
 # Call Stan ---------------------------------------------------------------
 
 fit <- stan(
-  file = "stan/BNN_hparams.stan",  
+  file = "stan/BNN_hparams.stan", #"stan/BNN_hparams.stan",  
   data = data,  
   chains = 4, 
   warmup = 1000, 
@@ -181,15 +220,22 @@ df_stan_summary <- stan_summary$summary %>%
 
 # Weight Parameter Names
 
-hidden_weights <- all_parameters[stringr::str_detect(all_parameters, "W") & 
-                 !stringr::str_detect(all_parameters, "W_gamma|W_sdev|W_precision")]
+hidden_weights_names <- all_parameters[stringr::str_detect(all_parameters, "W") & 
+                 !stringr::str_detect(all_parameters, "W_gamma|W_sdev|W_prec")]
 
 # Biases Parameter Names
 
-hidden_biases <- all_parameters[stringr::str_detect(all_parameters, "B") & 
-                                !stringr::str_detect(all_parameters, "B_gamma|B_sdev|B_precision")]
+hidden_biases_names <- all_parameters[stringr::str_detect(all_parameters, "B") & 
+                                !stringr::str_detect(all_parameters, "B_gamma|B_sdev|B_prec")]
 
-# Predicted Values of test set
+# Weight Standard Deviation (names)
+
+W_sdev_names <- all_parameters[stringr::str_detect(all_parameters, "W_sdev")]
+W_precision_names <- all_parameters[stringr::str_detect(all_parameters, "W_prec")]
+B_sdev_names <- all_parameters[stringr::str_detect(all_parameters, "W_sdev")]
+B_precision_names <- all_parameters[stringr::str_detect(all_parameters, "W_prec")]
+
+# predicted values of test set
 
 y_train_names <- all_parameters[str_detect(all_parameters, "y_train_pred")]
 y_test_names <- all_parameters[str_detect(all_parameters, "y_test_pred")]
@@ -233,25 +279,16 @@ pred_actual_plot <- ggplot(df_post_preds) +
   facet_wrap(label~., scales = "free_x") + 
   ggtitle("Predicted vs. Actual")
 
-ggsave(str_c(path, "/predicted_vs_actual.png"), 
-       pred_actual_plot,
-       width = 11, 
-       height = 8)
-
 yx_filtered_plot <- ggplot(df_post_preds %>% filter(X_V1 > -2.2)) + 
   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
   geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
+  geom_point(aes(x = X_V1, y = actual), color = "black", alpha = 0.2, size = 2) + 
   scale_color_manual(values = c("red2", "green3")) + 
   theme_bw() + 
   xlab("X") + 
   ylab("Y (Predicted)") + 
   theme(text = element_text(size=16)) + 
   ggtitle("Y vs. X", subtitle = "Filtered X < -2.2")
-
-ggsave(str_c(path, "/y_vs_x_filtered.png"), 
-       yx_filtered_plot,
-       width = 11, 
-       height = 8)
 
 yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) + 
   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
@@ -265,21 +302,16 @@ yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) +
   facet_wrap(label~., scales = "free") + 
   ggtitle("Y vs. X")
 
-ggsave(str_c(path, "/y_vs_x_unfiltered.png"), 
-       yx_unfiltered_plot,
-       width = 11, 
-       height = 8)
-
-# ggplot(df_post_preds) + 
-#   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
-#   geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
-#   geom_point(aes(x = X_V1, y = actual), color="black", alpha = 0.1, size = 1) + 
-#   scale_color_manual(values = c("red2", "green3")) + 
-#   theme_bw() + 
-#   xlab("X") + 
-#   ylab("Y (Predicted)") + 
-#   theme(text = element_text(size=16)) + 
-#   facet_wrap(label~., scales = "free") + 
+# ggplot(df_post_preds) +
+#   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) +
+#   geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) +
+#   geom_point(aes(x = X_V1, y = actual), color="black", alpha = 0.1, size = 1) +
+#   scale_color_manual(values = c("red2", "green3")) +
+#   theme_bw() +
+#   xlab("X") +
+#   ylab("Y (Predicted)") +
+#   theme(text = element_text(size=16)) +
+#   facet_wrap(label~., scales = "free") +
 #   ggtitle("Y vs. X", subtitle = "No filtered points")
 
 df_post_preds$Rhat %>% hist(col = "red2")
@@ -290,8 +322,12 @@ df_post_preds$Rhat %>% hist(col = "red2")
 
 # Parsing the distribution of weights in a clean way ---
 
-weights_parsed <- parse_stan_vars(hidden_weights, "W", 3)
-biases_parsed <- parse_stan_vars(hidden_biases, "B", 2)
+weights_parsed <- parse_stan_vars(hidden_weights_names, "W", 3)
+biases_parsed <- parse_stan_vars(hidden_biases_names, "B", 2)
+W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 1)
+W_precision_parsed <- parse_stan_vars(W_precision_names, "W_precision", 1)
+B_sdev_parsed <- parse_stan_vars(B_sdev_names, "W_sdev", 1)
+B_precision_parsed <- parse_stan_vars(B_precision_names, "W_precision", 1)
 
 # Weights analysis
 
@@ -323,7 +359,26 @@ for(i in 1:length(desired_weight_vars)){
     mcmc_trace_plot(var, burn_in = 1000)
 }
 
-# Save all weight plots
+# Save Results ------------------------------------------------------------
+
+# Prediction Plots
+
+ggsave(str_c(path, "/predicted_vs_actual.png"),
+       pred_actual_plot,
+       width = 11,
+       height = 8)
+
+ggsave(str_c(path, "/y_vs_x_filtered.png"),
+       yx_filtered_plot,
+       width = 11,
+       height = 8)
+
+ggsave(str_c(path, "/y_vs_x_unfiltered.png"),
+       yx_unfiltered_plot,
+       width = 11,
+       height = 8)
+
+# Weight Plots
 
 png(str_c(path, "/weights_ih.png"), width = 14, height = 8, units = "in", res=50)
 do.call("grid.arrange", c(weight_trace_plots[1:8], 
