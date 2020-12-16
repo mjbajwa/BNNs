@@ -3,7 +3,7 @@
 # Example FBM - BNN configuration file
 
 net-spec rlog.net 1 8 1 / ih=0.05:0.5 bh=0.05:0.5 ho=0.05:0.5 bo=100
-model-spec rlog.net real 0.05:0.5
+model-spec rlog.net real 0.05:0.5 
 net-spec rlog.net
 model-spec rlog.net
 data-spec rlog.net 1 1 / rdata@1:100 . rdata@101:200 .

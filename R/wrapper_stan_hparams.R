@@ -12,12 +12,16 @@ set.seed(10)
 # User Inputs -------------------------------------------------------------
 
 OUTPUT_PATH <- "./output/DEBUG/"
+STAN_FILE <- "./stan/BNN_hparams_dev.stan"
 
 # number of neurons per hidden layer.. e.g: c(8, 7) has two hidden layers with 8 and 7 hidden units respectively
 G <- c(8) 
 HIERARCHICAL_FLAG <- 1
 
 # FBM Parametrization
+
+# FBM_W <- list("GAMMA_WIDTH" = c(6/5, 6/5),
+#               "GAMMA_ALPHA" = c(12, 12))
 
 FBM_W <- list("GAMMA_WIDTH" = c(0.05, 0.05),
               "GAMMA_ALPHA" = c(0.5, 0.5))
@@ -52,6 +56,10 @@ W_gamma_shape <- W_STAN$STAN_ALPHA
 W_gamma_scale <- W_STAN$STAN_BETA
 B_gamma_shape <- B_STAN$STAN_ALPHA
 B_gamma_scale <- B_STAN$STAN_BETA
+
+temp <- rgamma(n=1000, shape=W_gamma_shape[1], scale=W_gamma_scale[1])
+# hist(1/sqrt(temp), col="red2")
+hist(log(1/sqrt(temp)), col="red2")
 
 # Load Data -----------------------------------------------------------
 
@@ -91,7 +99,7 @@ data = list(
 # Call Stan ---------------------------------------------------------------
 
 fit <- stan(
-  file = "stan/BNN_hparams.stan", #"stan/BNN_hparams.stan",  
+  file = STAN_FILE,   
   data = data,  
   chains = 4, 
   warmup = 1000, 
@@ -232,8 +240,8 @@ hidden_biases_names <- all_parameters[stringr::str_detect(all_parameters, "B") &
 
 W_sdev_names <- all_parameters[stringr::str_detect(all_parameters, "W_sdev")]
 W_precision_names <- all_parameters[stringr::str_detect(all_parameters, "W_prec")]
-B_sdev_names <- all_parameters[stringr::str_detect(all_parameters, "W_sdev")]
-B_precision_names <- all_parameters[stringr::str_detect(all_parameters, "W_prec")]
+B_sdev_names <- all_parameters[stringr::str_detect(all_parameters, "B_sdev")]
+B_precision_names <- all_parameters[stringr::str_detect(all_parameters, "B_prec")]
 
 # predicted values of test set
 
@@ -324,10 +332,10 @@ df_post_preds$Rhat %>% hist(col = "red2")
 
 weights_parsed <- parse_stan_vars(hidden_weights_names, "W", 3)
 biases_parsed <- parse_stan_vars(hidden_biases_names, "B", 2)
-W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 1)
-W_precision_parsed <- parse_stan_vars(W_precision_names, "W_precision", 1)
-B_sdev_parsed <- parse_stan_vars(B_sdev_names, "W_sdev", 1)
-B_precision_parsed <- parse_stan_vars(B_precision_names, "W_precision", 1)
+W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 3)
+W_precision_parsed <- parse_stan_vars(W_precision_names, "W_precision", 3)
+B_sdev_parsed <- parse_stan_vars(B_sdev_names, "B_sdev", 2)
+B_precision_parsed <- parse_stan_vars(B_precision_names, "B_precision", 2)
 
 # Weights analysis
 
