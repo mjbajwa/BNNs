@@ -41,7 +41,7 @@ parameters {
   real<lower=0> sigma;
 
   // Standard Deviation of Weights
-  vector[h+1] W_sdev;
+  vector<lower=0>[h+1] W_sdev;
   
 }
 

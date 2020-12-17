@@ -10,7 +10,7 @@ library(gridExtra)
 set.seed(10)
 
 # User Inputs -------------------------------------------------------------
-
+  
 OUTPUT_PATH <- "./output/DEBUG/"
 STAN_FILE <- "./stan/BNN_hparams_dev.stan"
 
@@ -20,14 +20,14 @@ HIERARCHICAL_FLAG <- 1
 
 # FBM Parametrization
 
-# FBM_W <- list("GAMMA_WIDTH" = c(6/5, 6/5),
-#               "GAMMA_ALPHA" = c(12, 12))
+FBM_W <- list("GAMMA_WIDTH" = c(1.5, 1.5),
+              "GAMMA_ALPHA" = c(5, 5))
 
-FBM_W <- list("GAMMA_WIDTH" = c(0.05, 0.05),
-              "GAMMA_ALPHA" = c(0.5, 0.5))
+# FBM_W <- list("GAMMA_WIDTH" = c(0.05, 0.05),
+#               "GAMMA_ALPHA" = c(1.2, 1.2))
 
-FBM_B <- list("GAMMA_WIDTH" = c(0.05, 0.05),
-              "GAMMA_ALPHA" = c(0.5, 0.5))
+# FBM_B <- list("GAMMA_WIDTH" = c(0.05, 0.05),
+#               "GAMMA_ALPHA" = c(0.5, 0.5))
 
 # FBM to Stan Utils -------------------------------------------------------
 
@@ -51,15 +51,16 @@ fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha){
 # Shape = Alpha, Scale = Beta
 
 W_STAN <- fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH, FBM_W$GAMMA_ALPHA)
-B_STAN <- fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
 W_gamma_shape <- W_STAN$STAN_ALPHA
 W_gamma_scale <- W_STAN$STAN_BETA
-B_gamma_shape <- B_STAN$STAN_ALPHA
-B_gamma_scale <- B_STAN$STAN_BETA
 
-temp <- rgamma(n=1000, shape=W_gamma_shape[1], scale=W_gamma_scale[1])
+# B_STAN <- fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
+# B_gamma_shape <- B_STAN$STAN_ALPHA
+# B_gamma_scale <- B_STAN$STAN_BETA
+
+precision <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
 # hist(1/sqrt(temp), col="red2")
-hist(log(1/sqrt(temp)), col="red2")
+hist(log10(1/sqrt(precision)), col="red2")
 
 # Load Data -----------------------------------------------------------
 
@@ -91,8 +92,8 @@ data = list(
   X_test = X_test,
   W_gamma_shape = W_gamma_shape,
   W_gamma_scale = W_gamma_scale,
-  B_gamma_shape = B_gamma_shape,
-  B_gamma_scale = B_gamma_scale,
+  # B_gamma_shape = B_gamma_shape,
+  # B_gamma_scale = B_gamma_scale,
   use_hierarchical = HIERARCHICAL_FLAG
 )
 
@@ -115,6 +116,8 @@ fit <- stan(
 folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
 path <- str_c(OUTPUT_PATH, folder_name)
 dir.create(path)
+
+capture.output(data, file = "My New File.txt")
 
 # Utility Functions -------------------------------------------------------
 
@@ -192,10 +195,7 @@ markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=
   
 }
 
-mcmc_trace_plot <- function(df_mcmc_param, var, burn_in){
-  
-  burn_in = 1000
-  var = "W[2,1,1]"
+mcmc_trace_plot <- function(df_mcmc_param, var, burn_in=1000){
   
   df_plot <- df_mcmc_param %>% 
     select(time_index, contains("chain_")) %>% 
