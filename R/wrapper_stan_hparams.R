@@ -14,23 +14,23 @@ set.seed(10)
 OUTPUT_PATH <- "./output/DEBUG/"
 STAN_FILE <- "./stan/BNN_hparams_dev.stan"
 
-# number of neurons per hidden layer.. e.g: c(8, 7) has two hidden layers with 8 and 7 hidden units respectively
+# Architecture Design
 
-G <- c(8) 
-INFINITE_LIMIT <- c(0L)
+G <- c(10) 
+INFINITE_LIMIT <- c(1)
 HIERARCHICAL_FLAG_W <- 1
 HIERARCHICAL_FLAG_B <- 0
 
 # Prior definition using FBM language
 
-FBM_W <- list("GAMMA_WIDTH" = rep(0.5, times = length(G) + 1),
-              "GAMMA_ALPHA" = rep(2, times = length(G) + 1))
+FBM_W <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
+              "GAMMA_ALPHA" = rep(3, length(G) + 1))
 
-FBM_B <- list("GAMMA_WIDTH" = rep(0.5, times = length(G) + 1),
-              "GAMMA_ALPHA" = rep(2, times = length(G) + 1))
+FBM_B <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
+              "GAMMA_ALPHA" = rep(3, length(G) + 1))
 
-FBM_Y <- list("GAMMA_WIDTH" = rep(0.5, times = 1),
-              "GAMMA_ALPHA" = rep(5, times = 1))
+FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
+              "GAMMA_ALPHA" = rep(6, 1))
 
 # FBM to Stan Conversion of Prior -------------------------------------------------------
 
@@ -140,7 +140,10 @@ dir.create(path)
 
 # TODO: Port to utils.R
 
-parse_stan_vars <- function(vars, stan_pattern="W", index_dim=3){
+parse_stan_vars <- function(vars, 
+                            stan_pattern="W", 
+                            index_dim=3, 
+                            column_names=c("layer", "incoming_neuron", "outgoing_neuron")){
   
   #' Parses stan variables
   
@@ -156,7 +159,7 @@ parse_stan_vars <- function(vars, stan_pattern="W", index_dim=3){
   }
   
   df_parsed <- as_tibble(parsed_outputs)
-  names(df_parsed) <- c("layer", "incoming_neuron", "outgoing_neuron")
+  names(df_parsed) <- column_names
   df_parsed <- df_parsed %>% 
     mutate(stan_var_name = vars) %>% 
     select(stan_var_name, everything())
@@ -264,6 +267,7 @@ B_precision_names <- all_parameters[stringr::str_detect(all_parameters, "B_prec"
 
 y_train_names <- all_parameters[str_detect(all_parameters, "y_train_pred")]
 y_test_names <- all_parameters[str_detect(all_parameters, "y_test_pred")]
+y_sigma_names <- all_parameters[str_detect(all_parameters, "y_sigma")]
 
 # Prediction of training and test set ----------------------------------------------------
 
@@ -327,18 +331,6 @@ yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) +
   facet_wrap(label~., scales = "free") + 
   ggtitle("Y vs. X")
 
-# ggplot(df_post_preds) +
-#   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) +
-#   geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) +
-#   geom_point(aes(x = X_V1, y = actual), color="black", alpha = 0.1, size = 1) +
-#   scale_color_manual(values = c("red2", "green3")) +
-#   theme_bw() +
-#   xlab("X") +
-#   ylab("Y (Predicted)") +
-#   theme(text = element_text(size=16)) +
-#   facet_wrap(label~., scales = "free") +
-#   ggtitle("Y vs. X", subtitle = "No filtered points")
-
 df_post_preds$Rhat %>% hist(col = "red2")
 
 # Extremely Paradoxical.... Why do the predictions feel good but the actual parameters end up diverging?
@@ -348,11 +340,12 @@ df_post_preds$Rhat %>% hist(col = "red2")
 # Parsing the distribution of weights in a clean way ---
 
 weights_parsed <- parse_stan_vars(hidden_weights_names, "W", 3)
-biases_parsed <- parse_stan_vars(hidden_biases_names, "B", 2)
-#W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 3)
-#W_precision_parsed <- parse_stan_vars(W_precision_names, "W_precision", 3)
-#B_sdev_parsed <- parse_stan_vars(B_sdev_names, "B_sdev", 2)
-#B_precision_parsed <- parse_stan_vars(B_precision_names, "B_precision", 2)
+W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 1, column_names = c("layer"))
+W_precision_parsed <- parse_stan_vars(W_precision_names, "W_prec", 1, column_names = c("layer"))
+
+biases_parsed <- parse_stan_vars(hidden_biases_names, "B", 2, column_names = c("neuron", "layer"))
+B_sdev_parsed <- parse_stan_vars(B_sdev_names, "B_sdev", 1, column_names = c("layer"))
+B_precision_parsed <- parse_stan_vars(B_precision_names, "B_prec", 1, column_names = c("layer"))
 
 # Weights analysis
 

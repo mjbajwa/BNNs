@@ -156,7 +156,7 @@ model {
           W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
           if(use_hierarchical_w == 1){
             if(infinite_limit[l] == 1){
-              W[l][g_in, g_out] ~ normal(0, 1/G[l]*W_sdev[l]); // * (1/sqrt(G[l]))); 
+              W[l][g_in, g_out] ~ normal(0, 1.0/G[l]*W_sdev[l]); // * (1/sqrt(G[l]))); 
             } else {
               W[l][g_in, g_out] ~ normal(0, W_sdev[l]); // * (1/sqrt(G[l]))); 
             }
