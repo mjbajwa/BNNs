@@ -16,7 +16,7 @@ STAN_FILE <- "./stan/BNN_hparams_dev.stan"
 
 # Architecture Design
 
-G <- c(10) 
+G <- c(100) 
 INFINITE_LIMIT <- c(1)
 HIERARCHICAL_FLAG_W <- 1
 HIERARCHICAL_FLAG_B <- 0
@@ -24,13 +24,13 @@ HIERARCHICAL_FLAG_B <- 0
 # Prior definition using FBM language
 
 FBM_W <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(3, length(G) + 1))
+              "GAMMA_ALPHA" = rep(5, length(G) + 1))
 
 FBM_B <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(3, length(G) + 1))
+              "GAMMA_ALPHA" = rep(5, length(G) + 1))
 
 FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
-              "GAMMA_ALPHA" = rep(6, 1))
+              "GAMMA_ALPHA" = rep(8, 1))
 
 # FBM to Stan Conversion of Prior -------------------------------------------------------
 
@@ -355,20 +355,40 @@ df_weights_posterior <- weights_parsed %>%
 df_biases_posterior <- biases_parsed %>% 
   left_join(df_stan_summary, by = "stan_var_name")
 
-# Parse out important weight parameters 
-# TODO: Do this in a more generalizable way
+# Parse out important weight parameters (that are not redundant)
 
-layer_1_weights <- df_weights_posterior %>% 
-  filter(layer == 1,
-         incoming_neuron == 1) %>% 
-  pull(stan_var_name)
+desired_weight_vars <- c()
 
-layer_2_weights <- df_weights_posterior %>% 
-  filter(layer == 2,
-         outgoing_neuron == 1) %>% 
-  pull(stan_var_name)
+for(l in 1:(length(G) + 1)){
+  
+  # Define vector of incoming hidden unit by layer
+  
+  if(l == 1){
+    previous_hidden_units = 1:ncol(X_train)
+  } else {
+    previous_hidden_units = 1:G[l-1]
+  }
+  
+  # Define vector of outgoing hidden unit by layer
+  
+  if(l == length(G) + 1){
+    next_hidden_units = 1
+  } else {
+    next_hidden_units = 1:G[l]
+  }
+  
+  # Define weights of layers
+  
+  layer_weights <- df_weights_posterior %>% 
+    filter(layer == 1,
+           incoming_neuron %in% previous_hidden_units,
+           outgoing_neuron %in% next_hidden_units) %>% 
+    pull(stan_var_name)
+  
+  desired_weight_vars <- c(desired_weight_vars, layer_weights)
+  
+}
 
-desired_weight_vars <- c(layer_1_weights, layer_2_weights)
 weight_trace_plots = list()
 
 for(i in 1:length(desired_weight_vars)){
