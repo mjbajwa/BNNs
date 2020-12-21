@@ -7,8 +7,8 @@ data {
   
   // Basic inputs 
   
-  int<lower=0> N; // Input Data examples
-  int<lower=0> K; // Input features
+  int<lower=0> N; // Number of rows/examples
+  int<lower=0> K; // Number of features
   int<lower=1> h; // Number of hidden layers 
   int G[h]; // Number of neurons per layer
   matrix[N, K] X_train; // Input matrix
@@ -16,32 +16,45 @@ data {
   int<lower=0> N_test; // Number of test examples
   matrix[N_test, K] X_test; // Input matrix for test examples
   
-  // Parameters for gamma hyperpriors on the *precision* of normal distributions
+  // Parameters for gamma priors on the *precision* of normal distributions of weights and biases
   
   vector[h+1] W_gamma_shape;
   vector[h+1] W_gamma_scale;
-  // vector[h+1] B_gamma_shape;
-  // vector[h+1] B_gamma_scale;
+  vector[h+1] B_gamma_shape;
+  vector[h+1] B_gamma_scale;
   
-  // Flag for using Hierarchical (helpful for debugging)
+  // Parameters for gamma priors on the noise level of outputs y
   
-  int<lower = 0, upper = 1> use_hierarchical; // 0 = use N(0,1), 1 = use N(0, sdev), prec = 1/(sdev^2), prec ~ Gamma(shape, scale)
+  real y_gamma_shape;
+  real y_gamma_scale;
+  
+  // Flag for using Hierarchical on weights and biases (helpful for debugging)
+  
+  int<lower=0, upper=1> use_hierarchical_w; 
+  int<lower=0, upper=1> use_hierarchical_b;
+  
+  // Flag for scaling sdev by number of hidden units in the layer (per Neal 1995)
+  
+  int<lower=0, upper=1> infinite_limit[h];
   
 }
 
 parameters {
   
   // Weights (W)
-  matrix[max(max(G), K), max(max(G), K)] W[h+1]; // Hidden layer weight matrices -- H+1 size because of additional layer for outputs 
+  // Hidden layer weight matrices -- h+1 sized array because of additional layer for outputs 
+  matrix[max(max(G), K), max(max(G), K)] W[h+1]; 
   
   // Intercepts (b)
-  matrix[max(G), h+1] B; // matrix for hidden layer intercepts
+  matrix[max(G), h+1] B; 
   
   // Standard Deviation of likelihood
-  real<lower=0> sigma;
+  // vector<lower=0>[N] y_sigma;
+  real y_sigma;
 
   // Standard Deviation of Weights
   vector<lower=0>[h+1] W_sdev;
+  vector<lower=1>[h+1] B_sdev;
   
 }
 
@@ -49,12 +62,14 @@ transformed parameters {
   
   // Define precision terms (1/sigma^2)
   vector[h+1] W_prec;
+  vector[h+1] B_prec;
 
   // Intermediate quantities
-  matrix[max(G), h] z[N]; // outputs of hidden layer. Each observation produces Gxh of these. Array index per observation.
+  matrix[max(G), h] z[N]; // outputs of hidden layers. Array index by oberservation
   vector[N] y_train_pred;
   
   // *** Forward Pass of Neural Network ***
+  // TODO: use matrix-multiplication to speed this up.
   
   // Loop over all observations
   for(n in 1:N) {
@@ -71,7 +86,6 @@ transformed parameters {
         // calculate for layer = 2 onwards
         for(g in 1:G[l]){
           z[n][g,l] = tanh(sum(z[n][1:G[l-1], l-1].*W[l][1:G[l-1], g]) + B[g, l]); 
-          
         }
         
       }
@@ -90,6 +104,7 @@ transformed parameters {
   
   for(l in 1:(h+1)){
     W_prec[l] = 1/(W_sdev[l]^2);
+    B_prec[l] = 1/(W_sdev[l]^2);
   }
     
 }
@@ -99,8 +114,10 @@ model {
 
   // ****** Likelihood function and measurement noise ******
   
-  y_train ~ normal(y_train_pred, sigma);
-  sigma ~ normal(0, 1);
+  y_sigma ~ gamma(y_gamma_shape, y_gamma_scale);
+  // for(n in 1:N)
+  //   y_sigma[n] ~  gamma(y_gamma_shape, y_gamma_scale);
+  y_train ~ normal(y_train_pred, y_sigma);
   
   // ***** Apply proper priors on all sdev and precision variables *****
   
@@ -110,33 +127,40 @@ model {
   // For each layer, precisions are sampled from a common prior distribution (gamma)
   
   for(l in 1:(h+1)){
-    if(l == 1){ // Hidden layer connected to Input Layer
+    // 1st hidden layer
+    if(l == 1){ 
       for(g_in in 1:K){
         for(g_out in 1:G[l]){
           W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
-          if(use_hierarchical == 1){
+          if(use_hierarchical_w == 1){
             W[l][g_in, g_out] ~ normal(0, W_sdev[l]); // * (1/sqrt(G[l]))); 
           } else {
             W[l][g_in, g_out] ~ normal(0, 1);
           }
         }
       }
-    } else if (l == h+1) { // Output Layer 
+    } else if (l == h+1) {            
+      // Output Layer
       for(g_in in 1:G[l-1]) {
         W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]);
-        if(use_hierarchical == 1){
+        if(use_hierarchical_w == 1){
             W[l][g_in, 1] ~ normal(0, W_sdev[l]); // * (1/sqrt(G[l]))); 
           } else {
              W[l][g_in, 1] ~ normal(0, 1);
           }
         }
     } else {
-      for(g_in in 1:G[l-1]) { // All hidden layers not connected to input/output
+      // Hidden layers not connected to input/output
+      for(g_in in 1:G[l-1]) {
         for(g_out in 1:G[l]){
           W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
-          if(use_hierarchical == 1){
-            W[l][g_in, g_out] ~ normal(0, W_sdev[l]); // * (1/sqrt(G[l]))); 
-          } else {
+          if(use_hierarchical_w == 1){
+            if(infinite_limit[l] == 1){
+              W[l][g_in, g_out] ~ normal(0, 1/G[l]*W_sdev[l]); // * (1/sqrt(G[l]))); 
+            } else {
+              W[l][g_in, g_out] ~ normal(0, W_sdev[l]); // * (1/sqrt(G[l]))); 
+            }
+        } else {
             W[l][g_in, g_out] ~ normal(0, 1);
           }
         }
@@ -149,18 +173,18 @@ model {
   for(l in 1:(h+1)){
     if (l == h+1){
       // For the output Layer -- only one bias term matters
-      // B_sdev[1, l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
-      if(use_hierarchical == 1){
-        B[1, l] ~ normal(0, 1); // normal(0, B_sdev[1, l]);
+      B_sdev[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
+      if(use_hierarchical_b == 1){
+        B[1, l] ~ normal(0, B_sdev[l]);
       } else {
         B[1, l] ~ normal(0, 1);
       }
     } else {
       // For all other layers, index only on useful weights
       for(g in 1:G[l]) {
-      // B_sdev[g, l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
-        if(use_hierarchical == 1){
-          B[g, l] ~ normal(0, 1); // normal(0, B_sdev[g, l]);
+        B_sdev[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
+        if(use_hierarchical_b == 1){
+          B[g, l] ~ normal(0, B_sdev[l]);
         } else {
           B[g, l] ~ normal(0, 1);
         }
@@ -172,9 +196,15 @@ model {
   
   // Required because we're applying a prior to (prec = 1/(sdev^2)).
   
-  if(use_hierarchical == 1){
+  if(use_hierarchical_w == 1){
     for(l in 1:(h+1)){
       target += log(2) - 3*log(W_sdev[l]);
+    }
+  }
+  
+  if(use_hierarchical_b == 1){
+    for(l in 1:(h+1)){
+      target += log(2) - 3*log(B_sdev[l]);
     }
   }
 

@@ -15,21 +15,26 @@ OUTPUT_PATH <- "./output/DEBUG/"
 STAN_FILE <- "./stan/BNN_hparams_dev.stan"
 
 # number of neurons per hidden layer.. e.g: c(8, 7) has two hidden layers with 8 and 7 hidden units respectively
+
 G <- c(8) 
-HIERARCHICAL_FLAG <- 1
+INFINITE_LIMIT <- c(0L)
+HIERARCHICAL_FLAG_W <- 1
+HIERARCHICAL_FLAG_B <- 0
 
-# FBM Parametrization
+# Prior definition using FBM language
 
-FBM_W <- list("GAMMA_WIDTH" = c(1.5, 1.5),
-              "GAMMA_ALPHA" = c(5, 5))
+FBM_W <- list("GAMMA_WIDTH" = rep(0.5, times = length(G) + 1),
+              "GAMMA_ALPHA" = rep(2, times = length(G) + 1))
 
-# FBM_W <- list("GAMMA_WIDTH" = c(0.05, 0.05),
-#               "GAMMA_ALPHA" = c(1.2, 1.2))
+FBM_B <- list("GAMMA_WIDTH" = rep(0.5, times = length(G) + 1),
+              "GAMMA_ALPHA" = rep(2, times = length(G) + 1))
 
-# FBM_B <- list("GAMMA_WIDTH" = c(0.05, 0.05),
-#               "GAMMA_ALPHA" = c(0.5, 0.5))
+FBM_Y <- list("GAMMA_WIDTH" = rep(0.5, times = 1),
+              "GAMMA_ALPHA" = rep(5, times = 1))
 
-# FBM to Stan Utils -------------------------------------------------------
+# FBM to Stan Conversion of Prior -------------------------------------------------------
+
+# TODO: add to utils.R
 
 fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha){
   
@@ -48,19 +53,29 @@ fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha){
 
 # Convert FBM parameterization to STAN parametrization ---------------
 
-# Shape = Alpha, Scale = Beta
+# Shape = alpha, Scale = beta
 
 W_STAN <- fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH, FBM_W$GAMMA_ALPHA)
 W_gamma_shape <- W_STAN$STAN_ALPHA
 W_gamma_scale <- W_STAN$STAN_BETA
 
-# B_STAN <- fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
-# B_gamma_shape <- B_STAN$STAN_ALPHA
-# B_gamma_scale <- B_STAN$STAN_BETA
+B_STAN <- fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
+B_gamma_shape <- B_STAN$STAN_ALPHA
+B_gamma_scale <- B_STAN$STAN_BETA
 
-precision <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
-# hist(1/sqrt(temp), col="red2")
-hist(log10(1/sqrt(precision)), col="red2")
+Y_STAN <- fbm_gamma_params_to_stan(FBM_Y$GAMMA_WIDTH, FBM_Y$GAMMA_ALPHA)
+Y_gamma_shape <- Y_STAN$STAN_ALPHA
+Y_gamma_scale <- Y_STAN$STAN_BETA
+
+# Check Prior
+
+precision_w <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
+precision_b <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
+precision_y <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
+
+hist(log10(1/sqrt(precision_w)), col="red2", main="Weights (log10 sdev)")
+hist(log10(1/sqrt(precision_b)), col="red2", main="Biases (log10 sdev)")
+hist(log10(1/sqrt(precision_y)), col="red2", main="Measurement Noise (log10 sdev)")
 
 # Load Data -----------------------------------------------------------
 
@@ -73,7 +88,7 @@ test_idx <- all_idx[!(all_idx %in% train_idx)]
 
 # Data pre-processing
 
-X_train <- matrix(df[train_idx, names(df)[!str_detect(string = names(df), target_col)]])  
+X_train <- matrix(df[train_idx, names(df)[!str_detect(string = names(df), target_col)]])
 y_train <- as.vector(matrix(df[train_idx, target_col]))
 X_test <- matrix(df[test_idx, names(df)[!str_detect(string = names(df), target_col)]])
 y_test <- as.vector(matrix(df[test_idx, target_col]))
@@ -92,9 +107,13 @@ data = list(
   X_test = X_test,
   W_gamma_shape = W_gamma_shape,
   W_gamma_scale = W_gamma_scale,
-  # B_gamma_shape = B_gamma_shape,
-  # B_gamma_scale = B_gamma_scale,
-  use_hierarchical = HIERARCHICAL_FLAG
+  B_gamma_shape = B_gamma_shape,
+  B_gamma_scale = B_gamma_scale,
+  y_gamma_shape = Y_gamma_shape, 
+  y_gamma_scale = Y_gamma_scale,
+  use_hierarchical_w = HIERARCHICAL_FLAG_W,
+  use_hierarchical_b = HIERARCHICAL_FLAG_B,
+  infinite_limit = array(INFINITE_LIMIT)
 )
 
 # Call Stan ---------------------------------------------------------------
@@ -116,8 +135,6 @@ fit <- stan(
 folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
 path <- str_c(OUTPUT_PATH, folder_name)
 dir.create(path)
-
-capture.output(data, file = "My New File.txt")
 
 # Utility Functions -------------------------------------------------------
 
@@ -332,10 +349,10 @@ df_post_preds$Rhat %>% hist(col = "red2")
 
 weights_parsed <- parse_stan_vars(hidden_weights_names, "W", 3)
 biases_parsed <- parse_stan_vars(hidden_biases_names, "B", 2)
-W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 3)
-W_precision_parsed <- parse_stan_vars(W_precision_names, "W_precision", 3)
-B_sdev_parsed <- parse_stan_vars(B_sdev_names, "B_sdev", 2)
-B_precision_parsed <- parse_stan_vars(B_precision_names, "B_precision", 2)
+#W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 3)
+#W_precision_parsed <- parse_stan_vars(W_precision_names, "W_precision", 3)
+#B_sdev_parsed <- parse_stan_vars(B_sdev_names, "B_sdev", 2)
+#B_precision_parsed <- parse_stan_vars(B_precision_names, "B_precision", 2)
 
 # Weights analysis
 
