@@ -40,8 +40,8 @@ FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
 MCMC_INPUTS <- list(
   "CHAINS" = 4,
   "CORES" = 8,
-  "ITER" = 20,
-  "BURN_IN" = 10
+  "ITER" = 2000,
+  "BURN_IN" = 1000
 )
 
 # Constants ---------------------------------------------------------------
@@ -230,6 +230,8 @@ markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=
   # var = "W[1,1,1]"
   
   # Create empty dataframe to save results
+  
+  # TODO: expose out 2000
   
   df_chains <- as_tibble(matrix(data=0, nrow = 2000, ncol=4))
   names(df_chains) <- as.vector(unlist(lapply(as.list(1:n_chains), function(x){paste("chain_", x, sep="")})))
