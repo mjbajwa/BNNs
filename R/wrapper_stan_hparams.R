@@ -6,10 +6,15 @@ library(stringr)
 library(ggplot2)
 library(tidyr)
 library(gridExtra)
+library(logr)
 
-set.seed(50)
+# Paths -------------------------------------------------------------------
+
 OUTPUT_PATH <- "./output/DEBUG/"
 STAN_FILE <- "./stan/BNN_hparams_dev.stan"
+INPUT_TYPE <- "power_plant" # power_plant
+SCALE_INPUT <- TRUE
+TRAIN_FRACTION <- 0.5
 
 # User Inputs -------------------------------------------------------------
 
@@ -31,6 +36,36 @@ FBM_B <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
 
 FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
               "GAMMA_ALPHA" = rep(5, 1))
+
+MCMC_INPUTS <- list(
+  "CHAINS" = 4,
+  "CORES" = 8,
+  "ITER" = 20,
+  "BURN_IN" = 10
+)
+
+# Constants ---------------------------------------------------------------
+
+set.seed(50)
+folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
+path <- str_c(OUTPUT_PATH, folder_name)
+dir.create(path)
+
+INPUTS <- list(
+  "G" = G,
+  "INFINITE_LIMIT" = INFINITE_LIMIT,
+  "HIERARCHICAL_FLAG_W" = HIERARCHICAL_FLAG_W,
+  "HIERARCHICAL_FLAG_B" = HIERARCHICAL_FLAG_B,
+  "HETEROSCEDASTIC" = HETEROSCEDASTIC,
+  "FBM_W" = FBM_W,
+  "FBM_B" = FBM_B,
+  "FBM_Y" = FBM_Y,
+  "INPUT_TYPE" = INPUT_TYPE, 
+  "SCALE_INPUT" = SCALE_INPUT,
+  "TRAIN_FRACTION" = TRAIN_FRACTION
+)
+
+capture.output(c(INPUTS, MCMC_INPUTS), file = str_c(path, '/inputs.txt'))
 
 # FBM to Stan Conversion of Prior -------------------------------------------------------
 
@@ -73,26 +108,47 @@ precision_w <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
 precision_b <- rgamma(n=1000, shape=B_gamma_shape[1], scale=1/B_gamma_scale[1])
 precision_y <- rgamma(n=1000, shape=Y_gamma_shape[1], scale=1/Y_gamma_scale[1])
 
-par(mfrow=c(3,1))
-hist(log10(1/sqrt(precision_w)), col="red2", main="Weights (log10 sdev)")
-hist(log10(1/sqrt(precision_b)), col="red2", main="Biases (log10 sdev)")
-hist(log10(1/sqrt(precision_y)), col="red2", main="Measurement Noise (log10 sdev)")
+# par(mfrow=c(3,1))
+# hist(log10(1/sqrt(precision_w)), col="red2", main="Weights (log10 sdev)")
+# hist(log10(1/sqrt(precision_b)), col="red2", main="Biases (log10 sdev)")
+# hist(log10(1/sqrt(precision_y)), col="red2", main="Measurement Noise (log10 sdev)")
 
 # Load Data -----------------------------------------------------------
 
-df <- data.frame(read.table("./fbm_logs/rdata", header = FALSE))
-colnames(df) <- c("X", "Y")
-target_col <- "Y"
+read_input_data <- function(input_type = "fbm_example|power_plant"){
+  
+  # Load data
+  
+  if(input_type == "fbm_example"){
+    df <- data.frame(read.table("./data/rdata", header = FALSE))
+    colnames(df) <- c("X", "Y")
+    target_col <- "Y"
+  } else if(input_type == "power_plant") { 
+    df <- read.csv("./data/power-plant.csv", header = TRUE)
+    colnames(df) <- c("X_1", "X_2", "X_3", "X_4", "Y")
+    target_col <- "Y"
+  } else {
+    break
+  }
+  return(df)
+}
+
+df <- read_input_data(INPUT_TYPE)
+if(SCALE_INPUT){
+  df <- scale(df)
+}
+
 all_idx <- 1:nrow(df)
-train_idx <- 1:100
+train_idx <- 1:floor(TRAIN_FRACTION*max(all_idx))
 test_idx <- all_idx[!(all_idx %in% train_idx)]
+target_col <- "Y"
 
 # Data pre-processing
 
-X_train <- matrix(df[train_idx, names(df)[!str_detect(string = names(df), target_col)]])
-y_train <- as.vector(matrix(df[train_idx, target_col]))
-X_test <- matrix(df[test_idx, names(df)[!str_detect(string = names(df), target_col)]])
-y_test <- as.vector(matrix(df[test_idx, target_col]))
+X_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(contains("X"))
+y_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(contains("Y")) %>% pull()
+X_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(contains("X"))
+y_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(contains("Y")) %>% pull()
 N <- nrow(X_train) # number of observations in training data
 K <- ncol(X_train) # number of input features
 N_test <- nrow(X_test) # number of observations in test data
@@ -123,20 +179,14 @@ data = list(
 fit <- stan(
   file = STAN_FILE,   
   data = data,  
-  chains = 4, 
-  warmup = 1000, 
-  iter = 2000, 
-  cores = 6, 
+  chains = MCMC_INPUTS$CHAINS, 
+  warmup = MCMC_INPUTS$BURN_IN, 
+  iter = MCMC_INPUTS$ITER, 
+  cores = MCMC_INPUTS$CORES, 
   refresh = 1,
   verbose = TRUE,
   seed = 1,
 )
-
-# Create dir to save outputs of the run
-
-folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
-path <- str_c(OUTPUT_PATH, folder_name)
-dir.create(path)
 
 # Utility Functions -------------------------------------------------------
 
@@ -223,7 +273,7 @@ mcmc_trace_plot <- function(df_mcmc_param, var, burn_in=1000){
   df_plot <- df_mcmc_param %>% 
     select(time_index, contains("chain_")) %>% 
     tidyr::pivot_longer(!time_index, names_to = "chain") %>% 
-    mutate(stationary = ifelse(time_index > 1000, T, F))
+    mutate(stationary = ifelse(time_index > burn_in, T, F))
   
   ggplot(df_plot) +
     geom_point(aes(x = time_index, y = value, color = chain, alpha = stationary), size=0.5) + 
@@ -311,16 +361,16 @@ pred_actual_plot <- ggplot(df_post_preds) +
   facet_wrap(label~., scales = "free_x") + 
   ggtitle("Predicted vs. Actual")
 
-yx_filtered_plot <- ggplot(df_post_preds %>% filter(X_V1 > -2.2)) + 
-  geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
-  geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
-  geom_point(aes(x = X_V1, y = actual), color = "black", alpha = 0.2, size = 2) + 
-  scale_color_manual(values = c("red2", "green3")) + 
-  theme_bw() + 
-  xlab("X") + 
-  ylab("Y (Predicted)") + 
-  theme(text = element_text(size=16)) + 
-  ggtitle("Y vs. X", subtitle = "Filtered X < -2.2")
+# yx_filtered_plot <- ggplot(df_post_preds %>% filter(X_V1 > -2.2)) + 
+#   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
+#   geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
+#   geom_point(aes(x = X_V1, y = actual), color = "black", alpha = 0.2, size = 2) + 
+#   scale_color_manual(values = c("red2", "green3")) + 
+#   theme_bw() + 
+#   xlab("X") + 
+#   ylab("Y (Predicted)") + 
+#   theme(text = element_text(size=16)) + 
+#   ggtitle("Y vs. X", subtitle = "Filtered X < -2.2")
 
 yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) + 
   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
@@ -393,8 +443,8 @@ weight_trace_plots = list()
 
 for(i in 1:length(desired_weight_vars)){
   var <- desired_weight_vars[i]
-  weight_trace_plots[[i]] <- markov_chain_samples(fit, var) %>% 
-    mcmc_trace_plot(var, burn_in = 1000)
+  weight_trace_plots[[desired_weight_vars[i]]] <- markov_chain_samples(fit, var) %>% 
+    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
 }
 
 # Save Results ------------------------------------------------------------
@@ -406,24 +456,14 @@ ggsave(str_c(path, "/predicted_vs_actual.png"),
        width = 11,
        height = 8)
 
-ggsave(str_c(path, "/y_vs_x_filtered.png"),
-       yx_filtered_plot,
-       width = 11,
-       height = 8)
 
 ggsave(str_c(path, "/y_vs_x_unfiltered.png"),
        yx_unfiltered_plot,
        width = 11,
        height = 8)
 
-# Weight Trace Plots
+# Save Weight Trace Plots  
 
-png(str_c(path, "/weights_ih.png"), width = 14, height = 8, units = "in", res=50)
-do.call("grid.arrange", c(weight_trace_plots[1:8], 
-                          ncol = floor(sqrt(length(weight_trace_plots)))))
-dev.off()
-
-png(str_c(path, "/weights_ho.png"), width = 14, height = 8, units = "in", res=50)
-do.call("grid.arrange", c(weight_trace_plots[9:16], 
-        ncol = floor(sqrt(length(weight_trace_plots)))))
+png(str_c(path, "/", "w_inputs_to_layers", ".png"), width = 20, height = 12, units = "in", res=100)
+do.call("grid.arrange", weight_trace_plots)
 dev.off()
