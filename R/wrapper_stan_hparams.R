@@ -12,15 +12,15 @@ library(logr)
 
 OUTPUT_PATH <- "./output/DEBUG/"
 STAN_FILE <- "./stan/BNN_hparams_dev.stan"
-INPUT_TYPE <- "power_plant" # power_plant
-SCALE_INPUT <- TRUE
+INPUT_TYPE <- "fbm_example" # power_plant
+SCALE_INPUT <- F
 TRAIN_FRACTION <- 0.5
 
 # User Inputs -------------------------------------------------------------
 
 # Architecture Design
 
-G <- c(8) 
+G <- c(100) 
 INFINITE_LIMIT <- c(1)
 HIERARCHICAL_FLAG_W <- 1
 HIERARCHICAL_FLAG_B <- 0
@@ -29,7 +29,7 @@ HETEROSCEDASTIC <- 1
 # Prior definition using FBM language
 
 FBM_W <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(2, length(G) + 1))
+              "GAMMA_ALPHA" = rep(0.5, length(G) + 1))
 
 FBM_B <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
               "GAMMA_ALPHA" = rep(1, length(G) + 1))
