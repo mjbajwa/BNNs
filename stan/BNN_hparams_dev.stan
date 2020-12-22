@@ -32,6 +32,7 @@ data {
   
   int<lower=0, upper=1> use_hierarchical_w; 
   int<lower=0, upper=1> use_hierarchical_b;
+  int<lower=0, upper=1> heteroscedastic; 
   
   // Flag for scaling sdev by number of hidden units in the layer (per Neal 1995)
   
@@ -50,11 +51,11 @@ parameters {
   
   // Standard Deviation of likelihood
   // vector<lower=0>[N] y_sigma;
-  real y_sigma;
+  vector<lower=0>[heteroscedastic ? N : 1] y_sdev;
 
-  // Standard Deviation of Weights
+  // Standard Deviation of Weights and biases
   vector<lower=0>[h+1] W_sdev;
-  vector<lower=1>[h+1] B_sdev;
+  vector<lower=0>[h+1] B_sdev;
   
 }
 
@@ -63,6 +64,7 @@ transformed parameters {
   // Define precision terms (1/sigma^2)
   vector[h+1] W_prec;
   vector[h+1] B_prec;
+  vector[heteroscedastic ? N : 1] y_prec;
 
   // Intermediate quantities
   matrix[max(G), h] z[N]; // outputs of hidden layers. Array index by oberservation
@@ -100,12 +102,22 @@ transformed parameters {
     
   // *** Precision transformation ***
   
-  // Weight parameters (useful weights only)
+  // Weight and biases sdev (useful weights only)
   
   for(l in 1:(h+1)){
     W_prec[l] = 1/(W_sdev[l]^2);
     B_prec[l] = 1/(W_sdev[l]^2);
   }
+  
+ // Standard deviation of targets
+ 
+ if(heteroscedastic == 1){
+   for(n in 1:N){
+     y_prec[n] = 1/(y_sdev[n]^2);
+   }
+ } else {
+    y_prec[1] = 1/(y_sdev[1]^2);
+ }
     
 }
 
@@ -114,10 +126,15 @@ model {
 
   // ****** Likelihood function and measurement noise ******
   
-  y_sigma ~ gamma(y_gamma_shape, y_gamma_scale);
-  // for(n in 1:N)
-  //   y_sigma[n] ~  gamma(y_gamma_shape, y_gamma_scale);
-  y_train ~ normal(y_train_pred, y_sigma);
+  if(heteroscedastic == 1){
+    for(n in 1:N){
+      y_prec[n] ~ gamma(y_gamma_shape, y_gamma_scale);
+      y_train[n] ~ normal(y_train_pred[n], y_sdev[n]);
+    }
+  } else {
+      y_prec[1] ~ gamma(y_gamma_shape, y_gamma_scale);
+      y_train ~ normal(y_train_pred, y_sdev[1]);
+  }
   
   // ***** Apply proper priors on all sdev and precision variables *****
   
@@ -206,6 +223,14 @@ model {
     for(l in 1:(h+1)){
       target += log(2) - 3*log(B_sdev[l]);
     }
+  }
+  
+  if(heteroscedastic == 1){
+    for(n in 1:N){
+      target += log(2) - 3*log(y_sdev[n]);
+    }
+  } else {
+    target += log(2) - 3*log(y_sdev[1]);
   }
 
   // ****** Priors on Non-Useful Weights ****** // Keep these hard-coded for now

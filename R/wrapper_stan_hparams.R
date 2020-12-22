@@ -7,30 +7,30 @@ library(ggplot2)
 library(tidyr)
 library(gridExtra)
 
-set.seed(10)
-
-# User Inputs -------------------------------------------------------------
-  
+set.seed(50)
 OUTPUT_PATH <- "./output/DEBUG/"
 STAN_FILE <- "./stan/BNN_hparams_dev.stan"
 
+# User Inputs -------------------------------------------------------------
+
 # Architecture Design
 
-G <- c(100) 
+G <- c(8) 
 INFINITE_LIMIT <- c(1)
 HIERARCHICAL_FLAG_W <- 1
 HIERARCHICAL_FLAG_B <- 0
+HETEROSCEDASTIC <- 1
 
 # Prior definition using FBM language
 
 FBM_W <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(5, length(G) + 1))
+              "GAMMA_ALPHA" = rep(2, length(G) + 1))
 
 FBM_B <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(5, length(G) + 1))
+              "GAMMA_ALPHA" = rep(1, length(G) + 1))
 
 FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
-              "GAMMA_ALPHA" = rep(8, 1))
+              "GAMMA_ALPHA" = rep(5, 1))
 
 # FBM to Stan Conversion of Prior -------------------------------------------------------
 
@@ -70,9 +70,10 @@ Y_gamma_scale <- Y_STAN$STAN_BETA
 # Check Prior
 
 precision_w <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
-precision_b <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
-precision_y <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
+precision_b <- rgamma(n=1000, shape=B_gamma_shape[1], scale=1/B_gamma_scale[1])
+precision_y <- rgamma(n=1000, shape=Y_gamma_shape[1], scale=1/Y_gamma_scale[1])
 
+par(mfrow=c(3,1))
 hist(log10(1/sqrt(precision_w)), col="red2", main="Weights (log10 sdev)")
 hist(log10(1/sqrt(precision_b)), col="red2", main="Biases (log10 sdev)")
 hist(log10(1/sqrt(precision_y)), col="red2", main="Measurement Noise (log10 sdev)")
@@ -113,6 +114,7 @@ data = list(
   y_gamma_scale = Y_gamma_scale,
   use_hierarchical_w = HIERARCHICAL_FLAG_W,
   use_hierarchical_b = HIERARCHICAL_FLAG_B,
+  heteroscedastic = HETEROSCEDASTIC, 
   infinite_limit = array(INFINITE_LIMIT)
 )
 
@@ -201,7 +203,8 @@ markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=
     tidyr::pivot_longer(!time_index) %>% 
     group_by(time_index) %>%
     summarize(mean_chains = mean(value),
-              sdev_chains = sd(value))
+              sdev_chains = sd(value)) %>% 
+    ungroup()
   
   # Join the summary with final
   
@@ -331,13 +334,10 @@ yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) +
   facet_wrap(label~., scales = "free") + 
   ggtitle("Y vs. X")
 
-df_post_preds$Rhat %>% hist(col = "red2")
-
-# Extremely Paradoxical.... Why do the predictions feel good but the actual parameters end up diverging?
+par(mfrow=c(3,1))
+df_post_preds$Rhat %>% hist(col = "red2", main="R-hat distribution for predicted values of y")
 
 # Trace Plot Analysis of MCMC for weights/biases ---------------------------------------------
-
-# Parsing the distribution of weights in a clean way ---
 
 weights_parsed <- parse_stan_vars(hidden_weights_names, "W", 3)
 W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 1, column_names = c("layer"))
@@ -380,7 +380,7 @@ for(l in 1:(length(G) + 1)){
   # Define weights of layers
   
   layer_weights <- df_weights_posterior %>% 
-    filter(layer == 1,
+    filter(layer == l,
            incoming_neuron %in% previous_hidden_units,
            outgoing_neuron %in% next_hidden_units) %>% 
     pull(stan_var_name)
@@ -416,7 +416,7 @@ ggsave(str_c(path, "/y_vs_x_unfiltered.png"),
        width = 11,
        height = 8)
 
-# Weight Plots
+# Weight Trace Plots
 
 png(str_c(path, "/weights_ih.png"), width = 14, height = 8, units = "in", res=50)
 do.call("grid.arrange", c(weight_trace_plots[1:8], 
