@@ -121,11 +121,11 @@ read_input_data <- function(input_type = "fbm_example|power_plant"){
   
   if(input_type == "fbm_example"){
     df <- data.frame(read.table("./data/rdata", header = FALSE))
-    colnames(df) <- c("X", "Y")
+    colnames(df) <- c("V1", "Y")
     target_col <- "Y"
   } else if(input_type == "power_plant") { 
     df <- read.csv("./data/power-plant.csv", header = TRUE)
-    colnames(df) <- c("X_1", "X_2", "X_3", "X_4", "Y")
+    colnames(df) <- c("V1", "V2", "V3", "V4", "Y")
     target_col <- "Y"
   } else {
     break
@@ -145,9 +145,9 @@ target_col <- "Y"
 
 # Data pre-processing
 
-X_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(contains("X"))
+X_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(-contains("Y"))
 y_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(contains("Y")) %>% pull()
-X_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(contains("X"))
+X_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(-contains("Y"))
 y_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(contains("Y")) %>% pull()
 N <- nrow(X_train) # number of observations in training data
 K <- ncol(X_train) # number of input features
@@ -386,7 +386,7 @@ yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) +
   facet_wrap(label~., scales = "free") + 
   ggtitle("Y vs. X")
 
-par(mfrow=c(3,1))
+par(mfrow=c(1,1))
 df_post_preds$Rhat %>% hist(col = "red2", main="R-hat distribution for predicted values of y")
 
 # Trace Plot Analysis of MCMC for weights/biases ---------------------------------------------
