@@ -1,11 +1,10 @@
 // Bayesian Neural Network 
 // 1. To modify activation functions, change "tanh" on line 43, 48 to a bounded function of your choice
 // 2. Prior structure on weights and biases: W[L, i, j] ~ normal(0, sig[L]^2); 1/sig^2 ~ gamma(shape, rate). Single level hierarchy assumed.
-// 3. Standard deviations not yet scaled using the number of weights in a given layer per Neal (1995). 
 
 data {
   
-  // Basic inputs 
+  // Base inputs
   
   int<lower=0> N; // Number of rows/examples
   int<lower=0> K; // Number of features
@@ -28,13 +27,13 @@ data {
   real y_gamma_shape;
   real y_gamma_scale;
   
-  // Flag for using Hierarchical on weights and biases (helpful for debugging)
+  // Flag for using Hierarchical on weights and biases
   
   int<lower=0, upper=1> use_hierarchical_w; 
   int<lower=0, upper=1> use_hierarchical_b;
   int<lower=0, upper=1> heteroscedastic; 
   
-  // Flag for scaling sdev by number of hidden units in the layer (per Neal 1995)
+  // Flag for scaling sdev by number of hidden units in the layer (per Neal 1995) for convergence
   
   int<lower=0, upper=1> infinite_limit[h];
   
@@ -44,16 +43,19 @@ parameters {
   
   // Weights (W)
   // Hidden layer weight matrices -- h+1 sized array because of additional layer for outputs 
+  
   matrix[max(max(G), K), max(max(G), K)] W[h+1]; 
   
   // Intercepts (b)
+  
   matrix[max(G), h+1] B; 
   
   // Standard Deviation of likelihood
-  // vector<lower=0>[N] y_sigma;
+  
   vector<lower=0>[heteroscedastic ? N : 1] y_sdev;
 
   // Standard Deviation of Weights and biases
+  
   vector<lower=0>[h+1] W_sdev;
   vector<lower=0>[h+1] B_sdev;
   
@@ -161,8 +163,12 @@ model {
       for(g_in in 1:G[l-1]) {
         W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]);
         if(use_hierarchical_w == 1){
-            W[l][g_in, 1] ~ normal(0, W_sdev[l]); // * (1/sqrt(G[l]))); 
+          if(infinite_limit[l-1] == 1){
+            W[l][g_in, 1] ~ normal(0, sqrt(1.0/G[l-1])*W_sdev[l]); 
           } else {
+            W[l][g_in, 1] ~ normal(0, W_sdev[l]);
+          }
+        } else {
              W[l][g_in, 1] ~ normal(0, 1);
           }
         }
@@ -276,7 +282,7 @@ model {
 
 generated quantities {
   
-  vector[N_test] y_test_pred;
+    vector[N_test] y_test_pred;
   matrix[max(G), h] z_test[N_test]; 
 
   // Loop over all observations
@@ -300,10 +306,12 @@ generated quantities {
     
   }
   
-  // Final Layer
+  // Final Layer Mean estimation
   
   for(n in 1:N_test)
     y_test_pred[n] = sum(z_test[n][1:G[h], h].*W[h+1][1:G[h], 1]) + B[1, h+1];
+
   
 }
 
+  

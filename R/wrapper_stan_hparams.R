@@ -20,7 +20,7 @@ TRAIN_FRACTION <- 0.5
 
 # Architecture Design
 
-G <- c(100) 
+G <- c(8) 
 INFINITE_LIMIT <- c(1)
 HIERARCHICAL_FLAG_W <- 1
 HIERARCHICAL_FLAG_B <- 0
@@ -29,13 +29,13 @@ HETEROSCEDASTIC <- 1
 # Prior definition using FBM language
 
 FBM_W <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(0.5, length(G) + 1))
+              "GAMMA_ALPHA" = rep(0.5*10, length(G) + 1))
 
 FBM_B <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(1, length(G) + 1))
+              "GAMMA_ALPHA" = rep(0.5*10, length  (G) + 1))
 
 FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
-              "GAMMA_ALPHA" = rep(5, 1))
+              "GAMMA_ALPHA" = rep(0.5*10, 1))
 
 MCMC_INPUTS <- list(
   "CHAINS" = 4,
@@ -108,10 +108,10 @@ precision_w <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
 precision_b <- rgamma(n=1000, shape=B_gamma_shape[1], scale=1/B_gamma_scale[1])
 precision_y <- rgamma(n=1000, shape=Y_gamma_shape[1], scale=1/Y_gamma_scale[1])
 
-# par(mfrow=c(3,1))
-# hist(log10(1/sqrt(precision_w)), col="red2", main="Weights (log10 sdev)")
-# hist(log10(1/sqrt(precision_b)), col="red2", main="Biases (log10 sdev)")
-# hist(log10(1/sqrt(precision_y)), col="red2", main="Measurement Noise (log10 sdev)")
+par(mfrow=c(3,1))
+hist(log10(1/sqrt(precision_w)), col="red2", main="Weights (log10 sdev)")
+hist(log10(1/sqrt(precision_b)), col="red2", main="Biases (log10 sdev)")
+hist(log10(1/sqrt(precision_y)), col="red2", main="Measurement Noise (log10 sdev)")
 
 # Load Data -----------------------------------------------------------
 
@@ -270,14 +270,14 @@ markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=
   
 }
 
-mcmc_trace_plot <- function(df_mcmc_param, var, burn_in=1000){
+mcmc_trace_plot <- function(df_mcmc_param, var, burn_in=1000, min_time = 0){
   
   df_plot <- df_mcmc_param %>% 
     select(time_index, contains("chain_")) %>% 
     tidyr::pivot_longer(!time_index, names_to = "chain") %>% 
     mutate(stationary = ifelse(time_index > burn_in, T, F))
   
-  ggplot(df_plot) +
+  ggplot(df_plot %>% filter(time_index > min_time)) +
     geom_point(aes(x = time_index, y = value, color = chain, alpha = stationary), size=0.5) + 
     scale_alpha_manual(values=c(0.05, 1)) + 
     geom_vline(xintercept = burn_in,
@@ -407,6 +407,10 @@ df_weights_posterior <- weights_parsed %>%
 df_biases_posterior <- biases_parsed %>% 
   left_join(df_stan_summary, by = "stan_var_name")
 
+df_hyperparams_posterior <- W_sdev_parsed %>% 
+  bind_rows(W_precision_parsed) %>% 
+  left_join(df_stan_summary, by = "stan_var_name")
+
 # Parse out important weight parameters (that are not redundant)
 
 desired_weight_vars <- c()
@@ -441,12 +445,25 @@ for(l in 1:(length(G) + 1)){
   
 }
 
-weight_trace_plots = list()
+# Trace Plots for Weights
+
+weight_trace_plots <- list()
 
 for(i in 1:length(desired_weight_vars)){
   var <- desired_weight_vars[i]
   weight_trace_plots[[desired_weight_vars[i]]] <- markov_chain_samples(fit, var) %>% 
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
+}
+
+# Trace Plots for Hyperparameters
+
+desired_hp_vars <- df_hyperparams_posterior$stan_var_name
+hp_trace_plots = list()
+
+for(i in 1:length(desired_hp_vars)){
+  var <- desired_hp_vars[i]
+  hp_trace_plots[[desired_hp_vars[i]]] <- markov_chain_samples(fit, var) %>% 
+    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = MCMC_INPUTS$BURN_IN - 10)
 }
 
 # Save Results ------------------------------------------------------------
@@ -458,7 +475,6 @@ ggsave(str_c(path, "/predicted_vs_actual.png"),
        width = 11,
        height = 8)
 
-
 ggsave(str_c(path, "/y_vs_x_unfiltered.png"),
        yx_unfiltered_plot,
        width = 11,
@@ -469,3 +485,45 @@ ggsave(str_c(path, "/y_vs_x_unfiltered.png"),
 png(str_c(path, "/", "w_inputs_to_layers", ".png"), width = 20, height = 12, units = "in", res=100)
 do.call("grid.arrange", weight_trace_plots)
 dev.off()
+
+# Save Hyperparameter Trace Plots  
+
+png(str_c(path, "/", "hp_traces", ".png"), width = 20, height = 12, units = "in", res=100)
+do.call("grid.arrange", hp_trace_plots)
+dev.off()
+
+# Get Rejection Rate ------------------------------------------------------
+
+sampler_params <- get_sampler_params(fit, inc_warmup = FALSE)
+df_samples <- tibble()
+
+for(chain in 1:length(sampler_params)){
+    
+  df_temp <- sampler_params[[chain]] %>% as_tibble() %>% mutate(chain = chain)
+  df_samples <- df_samples %>% bind_rows(df_temp)
+  
+}
+
+df_plot_stats_mean <- df_samples %>% 
+  group_by(chain) %>% 
+  summarise_all(.funs=list("mean" = mean))
+
+df_plot_stats <- df_samples %>% 
+  pivot_longer(cols=c("accept_stat__", "stepsize__", "treedepth__", "n_leapfrog__", "divergent__", "energy__"))
+
+chain_statistics <- df_plot_stats %>%
+  mutate(chain = as.character(chain)) %>% 
+  ggplot() + 
+  geom_boxplot(aes(x = chain, y = value, fill = name), alpha=0.5) + 
+  facet_wrap(name~., scales = "free") + 
+  theme_bw() + 
+  ylab("") + 
+  ggtitle("Markov chain Monte Carlo - statistics of key attributes for NUTS") + 
+  theme(text = element_text(size=14), 
+        legend.position = "none")
+
+capture.output(df_plot_stats_mean, file = str_c(path, '/chain_stats.txt'))
+ggsave(str_c(path, "/chain_statistics.png"),
+       chain_statistics,
+       width = 11,
+       height = 8)
