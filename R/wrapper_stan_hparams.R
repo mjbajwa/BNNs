@@ -6,7 +6,6 @@ library(stringr)
 library(ggplot2)
 library(tidyr)
 library(gridExtra)
-library(logr)
 
 # Paths -------------------------------------------------------------------
 
@@ -23,19 +22,19 @@ TRAIN_FRACTION <- 0.5
 G <- c(8) 
 INFINITE_LIMIT <- c(1)
 HIERARCHICAL_FLAG_W <- 1
-HIERARCHICAL_FLAG_B <- 0
+HIERARCHICAL_FLAG_B <- 1
 HETEROSCEDASTIC <- 1
 
 # Prior definition using FBM language
 
 FBM_W <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(0.5*10, length(G) + 1))
+              "GAMMA_ALPHA" = rep(0.5*1, length(G) + 1))
 
 FBM_B <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(0.5*10, length  (G) + 1))
+              "GAMMA_ALPHA" = rep(0.5*1, length(G) + 1))
 
 FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
-              "GAMMA_ALPHA" = rep(0.5*10, 1))
+              "GAMMA_ALPHA" = rep(0.5*1, 1))
 
 MCMC_INPUTS <- list(
   "CHAINS" = 4,
@@ -463,7 +462,8 @@ hp_trace_plots = list()
 for(i in 1:length(desired_hp_vars)){
   var <- desired_hp_vars[i]
   hp_trace_plots[[desired_hp_vars[i]]] <- markov_chain_samples(fit, var) %>% 
-    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = MCMC_INPUTS$BURN_IN - 10)
+    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = MCMC_INPUTS$BURN_IN - 10) + 
+    coord_trans(y = "log10")
 }
 
 # Save Results ------------------------------------------------------------

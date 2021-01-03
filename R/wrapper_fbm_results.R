@@ -1,0 +1,127 @@
+# Load Libraries
+
+library(janitor)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(viridis)
+library(gridExtra)
+
+# Load FBM Results
+
+df_fbm <- data.frame(read.table("./fbm_logs/results/results.txt", header = TRUE)) %>% 
+  janitor::clean_names() %>% 
+  as_tibble()
+
+# Load FBM traces
+# TODO: port to utils.R
+
+load_trace_data <- function(id){
+
+  df_trace <- data.frame(read.table(str_c("./fbm_logs/results/traces_", id, ".txt"), header = FALSE)) %>% 
+    janitor::clean_names() %>% 
+    as_tibble()
+  
+  # Clean up naming convention
+  
+  new_names <- paste(id, str_replace(names(df_trace), "v", ""), sep = "_")
+  new_names <- c("t", new_names[-length(new_names)])
+  names(df_trace) <- new_names
+  
+  return(df_trace)
+  
+}
+
+groups <- c("w1", "w2", "w3", "w4", "h1", "h2", "h3")
+traces <- list()
+
+for(id in groups){
+  traces[[id]] <- load_trace_data(id)
+}
+
+
+# Plots for FBM specific analysis
+
+predicted_vs_actual <- ggplot(df_fbm) + 
+  geom_point(aes(x = targets, y = means), alpha = 0.5, size = 2, color="red2") + 
+  geom_linerange(aes(x = targets, ymin =x10_qnt, ymax= x90_qnt), alpha = 0.5) + 
+  geom_abline(slope=1,intercept=0) + 
+  theme_bw() + 
+  xlab("Actual") + 
+  ylab("Predicted") + 
+  theme(text = element_text(size=16)) + 
+  ggtitle("Predicted vs. Actual (FBM)")
+
+y_vs_x <- ggplot(df_fbm) + #%>% filter(X_V1 > -2.2)) + 
+  geom_ribbon(aes(x = inputs, ymin = x10_qnt, ymax= x90_qnt), fill = "red2", alpha = 0.3) + 
+  geom_point(aes(x = inputs, y = targets), alpha = 0.5, color="red2", size = 2) + 
+  theme_bw() + 
+  xlab("X") + 
+  ylab("Y (Predicted)") + 
+  theme(text = element_text(size=16)) + 
+  ggtitle("Y vs. X (FBM)")
+
+# FBM + Other Stuff -------------------------------------------------------
+
+low_level_group_traces <- list()
+upper_level_group_traces <- list()
+
+lower_group_id <- groups[str_detect(groups, "w")]
+upper_group_id <- groups[str_detect(groups, "h")]
+
+for(id in lower_group_id){
+
+  df_plot <- traces[[id]]%>% 
+    tidyr::pivot_longer(!t, names_to = "vars")
+  
+  low_level_group_traces[[id]] <- ggplot(df_plot) +
+    geom_point(aes(x = t, y = value, color = vars, alpha=t), size=1.) + 
+    theme_bw() + 
+    scale_color_viridis(discrete=T) + 
+    ggtitle(str_c("FBM group id: ", id)) + 
+    xlab("") + 
+    ylab("") + 
+    theme(text=element_text(size=16),
+          legend.position = "none")
+  
+}
+
+for(id in upper_group_id){
+  
+  df_plot <- traces[[id]]%>% 
+    tidyr::pivot_longer(!t, names_to = "vars")
+  
+  upper_level_group_traces[[id]] <- ggplot(df_plot) +
+    geom_point(aes(x = t, y = value, color = vars, alpha=t), size=1., color="green3") + 
+    theme_bw() + 
+    ggtitle(str_c("FBM group id: ", id)) + 
+    xlab("") + 
+    ylab("") + 
+    theme(text=element_text(size=16),
+          legend.position = "none") + 
+    coord_trans(y="log10")
+  
+}
+
+
+# Save results as images --------------------------------------------------
+
+path <- "./fbm_logs/postprocessed/"
+
+ggsave(str_c(path, "predicted_vs_actual.png"),
+       predicted_vs_actual,
+       width = 11,
+       height = 8)
+
+ggsave(str_c(path, "y_vs_x.png"),
+       y_vs_x,
+       width = 11,
+       height = 8)
+
+png(str_c(path, "/", "low_level_traces", ".png"), width = 20, height = 12, units = "in", res=100)
+do.call("grid.arrange", low_level_group_traces)
+dev.off()
+
+png(str_c(path, "/", "upper_level_traces", ".png"), width = 20, height = 12, units = "in", res=100)
+do.call("grid.arrange", upper_level_group_traces)
+dev.off()

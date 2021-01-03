@@ -152,7 +152,7 @@ model {
         for(g_out in 1:G[l]){
           W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
           if(use_hierarchical_w == 1){
-            W[l][g_in, g_out] ~ normal(0, W_sdev[l]); // * (1/sqrt(G[l]))); 
+            W[l][g_in, g_out] ~ normal(0, W_sdev[l]); 
           } else {
             W[l][g_in, g_out] ~ normal(0, 1);
           }
@@ -179,9 +179,9 @@ model {
           W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
           if(use_hierarchical_w == 1){
             if(infinite_limit[l] == 1){
-              W[l][g_in, g_out] ~ normal(0, sqrt(1.0/G[l])*W_sdev[l]); // * (1/sqrt(G[l]))); 
+              W[l][g_in, g_out] ~ normal(0, sqrt(1.0/G[l])*W_sdev[l]); 
             } else {
-              W[l][g_in, g_out] ~ normal(0, W_sdev[l]); // * (1/sqrt(G[l]))); 
+              W[l][g_in, g_out] ~ normal(0, W_sdev[l]); 
             }
         } else {
             W[l][g_in, g_out] ~ normal(0, 1);
@@ -282,7 +282,7 @@ model {
 
 generated quantities {
   
-    vector[N_test] y_test_pred;
+  vector[N_test] y_test_pred;
   matrix[max(G), h] z_test[N_test]; 
 
   // Loop over all observations
