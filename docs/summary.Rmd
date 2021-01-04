@@ -1,0 +1,201 @@
+---
+title: "Hyperparameter Sampling: Gibbs vs. NUTS"
+# author: "Jamal Bajwa"
+date: "01/01/2021"
+output: 
+  beamer_presentation:    
+    theme: "boxes"
+    slide_level: 4
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.align="center")
+```
+
+# Objective
+
+#### Background
+
+- The parameters (weights and biases) of a Bayesian Neural Network (BNN) are generally assigned to __groups__
+
+- The prior distributions for parameters in a groups share __common hyperparameters__
+
+  - For example, all weights in the $j^{th}$ layer might be assigned priors: $P(w_{i,j}) = N(0, \sigma_j)$, $P(1/\sigma_j^2) = Gamma(\alpha, \beta)$
+
+- The hyperparameters are also parameters of the probabilistic model, whose posterior distribution is a pre-requisite for the predictive distribution of target variable on unseen data
+
+  - Thus, sampling the posterior distribution of the hyperparameters is arguably as important as the posterior of the low-level parameters (weights, biases)
+
+#### Objective
+
+- For BNNs with normal priors on weights/biases, a gamma distribution is oft-used to sample the precision of the normal distribution in a group
+
+- Neal (1995) pioneered this idea, and used Gibbs sampling for sampling hyperparameters ($P(\sigma | w_{i,j})$ has an analytical form)
+
+  - (The scheme couples Gibbs sampling on hyperparameters and Hamiltonian Monte Carlo updates on the weights)
+
+- Our objective is to test if contemporary adaptive HMC methods (such as No-U-Turn sampler) offer a competitive replacement for Gibbs sampling for hyperparameter sampling in BNNs
+
+#### Experiments Overview
+
+- The experiments are conducted over __vague__ and __less vague__ priors for all groups of parameters
+
+![Prior Distributions](priors.png){width=225px, height=225px}
+
+# Experiment 1 (Vague Priors)
+
+#### Assumptions
+
+Architecture:
+
+- 1 hidden layer, 8 hidden units
+- tanh activation 
+- _parameter groups_: input-hidden weights, output-hidden weights, hidden biases, output bias
+
+Data:
+
+- from FBM example 
+- input dimensions = 1, output dimensions = 1
+
+Hyperparameter Priors (FBM Notation):
+
+- input-hidden weights hyperparameter: 0.05:0.5
+- hidden-output weights hyperparameter: 0.05:0.5 
+- hidden biases hyperparameter: 0.05:0.5
+- output bias hyperparameter: 0.05:0.5
+- target noise: 0.05:0.5
+
+#### NUTS - Weight Traces
+
+![Weight Traces](../output/stan_2021_01_03_17_58_54/w_inputs_to_layers.png){width=225px, height=225px}
+
+#### NUTS - Hyperparameter Traces
+
+![Hyperparameter Traces](../output/stan_2021_01_03_17_58_54/hp_traces.png){width=225px, height=225px}
+
+#### NUTS - Test Set Predictions
+
+![Predictive Quality](../output/stan_2021_01_03_17_58_54/y_vs_x_unfiltered.png){width=225px, height=225px}
+
+#### NUTS - Chain statistics
+
+![Chain Statistics](../output/stan_2021_01_03_17_58_54/chain_statistics.png){width=225px, height=225px}
+
+#### FBM - Weight Traces
+
+![Weight Traces](../output/fbm_2021_01_03_18_56_58/low_level_traces.png){width=225px, height=225px}
+
+#### FBM - Hyperparameter Traces
+
+![Hyperparameter Traces](../output/fbm_2021_01_03_18_56_58/upper_level_traces.png){width=225px, height=225px}
+
+#### FBM - Test Set Predictions
+
+![Predictive Quality](../output/fbm_2021_01_03_18_56_58/y_vs_x.png){width=225px, height=225px}
+
+# Experiment 2 (Less Vague Priors)
+
+#### Assumptions
+
+Architecture:
+
+- 1 hidden layer, 8 hidden units
+- tanh activation 
+- _parameter groups_: input-hidden weights, output-hidden weights, hidden biases, output bias
+
+Data:
+
+- from FBM example 
+- input dimensions = 1, output dimensions = 1
+
+Hyperparameter Priors (FBM Notation):
+
+- input-hidden weights hyperparameter: 0.05:1
+- hidden-output weights hyperparameter: 0.05:1
+- hidden biases hyperparameter: 0.05:1
+- output bias hyperparameter: 0.05:1
+- target noise: 0.05:1
+
+#### NUTS - Weight Traces
+
+![Weight Traces](../output/stan_2021_01_04_13_07_24/w_inputs_to_layers.png){width=225px, height=225px}
+
+#### NUTS - Hyperparameter Traces
+
+![Hyperparameter Traces](../output/stan_2021_01_04_13_07_24/hp_traces.png){width=225px, height=225px}
+
+#### NUTS - Test Set Predictions
+
+![Predictive Quality](../output/stan_2021_01_04_13_07_24/y_vs_x_unfiltered.png){width=225px, height=225px}
+
+#### NUTS - Chain statistics
+
+![Chain Statistics](../output/stan_2021_01_04_13_07_24/chain_statistics.png){width=225px, height=225px}
+
+#### FBM - Weight Traces
+
+![Weight Traces](../output/fbm_2021_01_04_12_54_10/low_level_traces.png){width=225px, height=225px}
+
+#### FBM - Hyperparameter Traces
+
+![Hyperparameter Traces](../output/fbm_2021_01_04_12_54_10/upper_level_traces.png){width=225px, height=225px}
+
+#### FBM - Test Set Predictions
+
+![Predictive Quality](../output/fbm_2021_01_04_12_54_10/y_vs_x.png){width=225px, height=225px}
+
+
+# Experiment 3 (Less Vague Priors)
+
+#### Assumptions
+
+Architecture:
+
+- 1 hidden layer, 8 hidden units
+- tanh activation 
+- _parameter groups_: input-hidden weights, output-hidden weights, hidden biases, output bias
+
+Data:
+
+- from FBM example 
+- input dimensions = 1, output dimensions = 1
+
+Hyperparameter Priors (FBM Notation):
+
+- input-hidden weights hyperparameter: 0.05:5
+- hidden-output weights hyperparameter: 0.05:5 
+- hidden biases hyperparameter: 0.05:5
+- output bias hyperparameter: 0.05:5
+- target noise: 0.05:5
+
+
+
+#### NUTS - Weight Traces
+
+![Weight Traces](../output/stan_2021_01_04_14_08_00/w_inputs_to_layers.png){width=225px, height=225px}
+
+#### NUTS - Hyperparameter Traces
+
+![Hyperparameter Traces](../output/stan_2021_01_04_14_08_00/hp_traces.png){width=225px, height=225px}
+
+#### NUTS - Test Set Predictions
+
+![Predictive Quality](../output/stan_2021_01_04_14_08_00/y_vs_x_unfiltered.png){width=225px, height=225px}
+
+#### NUTS - Chain statistics
+
+![Chain Statistics](../output/stan_2021_01_04_11_00_01/chain_statistics.png){width=225px, height=225px}
+
+#### FBM - Weight Traces
+
+![Weight Traces](../output/fbm_2021_01_04_13_02_45/low_level_traces.png){width=225px, height=225px}
+
+#### FBM - Hyperparameter Traces
+
+![Hyperparameter Traces](../output/fbm_2021_01_04_13_02_45/upper_level_traces.png){width=225px, height=225px}
+
+#### FBM - Test Set Predictions
+
+![Predictive Quality](../output/fbm_2021_01_04_13_02_45/y_vs_x.png){width=225px, height=225px}

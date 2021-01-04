@@ -9,7 +9,7 @@ library(gridExtra)
 
 # Paths -------------------------------------------------------------------
 
-OUTPUT_PATH <- "./output/DEBUG/"
+OUTPUT_PATH <- "./output/"
 STAN_FILE <- "./stan/BNN_hparams_dev.stan"
 INPUT_TYPE <- "fbm_example" # power_plant
 SCALE_INPUT <- F
@@ -20,25 +20,29 @@ TRAIN_FRACTION <- 0.5
 # Architecture Design
 
 G <- c(8) 
-INFINITE_LIMIT <- c(1)
+INFINITE_LIMIT <- c(1) # does not apply to ih weights
 HIERARCHICAL_FLAG_W <- 1
 HIERARCHICAL_FLAG_B <- 1
 HETEROSCEDASTIC <- 1
+INIT_FUN <- function(...) list(W_sdev=rep(runif(1, 0.05, 1), length(G)+1), 
+                               B_sdev=rep(runif(1, 0.05, 1), length(G) + 1))  # initial values for W and B sdev.
 
 # Prior definition using FBM language
 
 FBM_W <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(0.5*1, length(G) + 1))
+              "GAMMA_ALPHA" = rep(0.5, length(G) + 1))
 
 FBM_B <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(0.5*1, length(G) + 1))
+              "GAMMA_ALPHA" = rep(0.5, length(G) + 1))
 
 FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
-              "GAMMA_ALPHA" = rep(0.5*1, 1))
+              "GAMMA_ALPHA" = rep(0.5, 1))
+
+# MCMC control for stan
 
 MCMC_INPUTS <- list(
   "CHAINS" = 4,
-  "CORES" = 8,
+  "CORES" = 4,
   "ITER" = 2000,
   "BURN_IN" = 1000
 )
@@ -47,7 +51,7 @@ MCMC_INPUTS <- list(
 
 set.seed(50)
 folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
-path <- str_c(OUTPUT_PATH, folder_name)
+path <- str_c(OUTPUT_PATH, "stan_", folder_name)
 dir.create(path)
 
 INPUTS <- list(
@@ -61,7 +65,8 @@ INPUTS <- list(
   "FBM_Y" = FBM_Y,
   "INPUT_TYPE" = INPUT_TYPE, 
   "SCALE_INPUT" = SCALE_INPUT,
-  "TRAIN_FRACTION" = TRAIN_FRACTION
+  "TRAIN_FRACTION" = TRAIN_FRACTION,
+  "INIT_VALUES" = INIT_FUN()
 )
 
 capture.output(c(INPUTS, MCMC_INPUTS), file = str_c(path, '/inputs.txt'))
@@ -175,16 +180,19 @@ data = list(
 
 # Call Stan ---------------------------------------------------------------
 
+INIT_FUN <- function(...) list(W_sdev=rep(0.05, length(G)+1), B_sdev=rep(0.05, length(G) + 1))
+
 fit <- stan(
   file = STAN_FILE,   
   data = data,  
+  init = INIT_FUN,
   chains = MCMC_INPUTS$CHAINS, 
   warmup = MCMC_INPUTS$BURN_IN, 
   iter = MCMC_INPUTS$ITER, 
   cores = MCMC_INPUTS$CORES, 
   refresh = 1,
   verbose = TRUE,
-  seed = 1,
+  seed = 3,
 )
 
 # Utility Functions -------------------------------------------------------
@@ -232,7 +240,7 @@ markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=
   
   # TODO: expose out 2000
   
-  df_chains <- as_tibble(matrix(data=0, nrow = 2000, ncol=4))
+  df_chains <- as_tibble(matrix(data=0, nrow = iters, ncol=4))
   names(df_chains) <- as.vector(unlist(lapply(as.list(1:n_chains), function(x){paste("chain_", x, sep="")})))
   
   # Loop through each chain and extract the samples
@@ -269,7 +277,7 @@ markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=
   
 }
 
-mcmc_trace_plot <- function(df_mcmc_param, var, burn_in=1000, min_time = 0){
+mcmc_trace_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0){
   
   df_plot <- df_mcmc_param %>% 
     select(time_index, contains("chain_")) %>% 
@@ -375,7 +383,8 @@ pred_actual_plot <- ggplot(df_post_preds) +
 
 yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) + 
   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
-  geom_point(aes(x = X_V1, y = actual, color=label), alpha = 0.5, size = 2) + 
+  geom_point(aes(x = X_V1, y = actual), alpha = 0.5, color="black", size = 1.5, alpha = 0.5) + 
+  geom_line(aes(x = X_V1, y = mean, color=label), size = 0.8, alpha = 0.4) + 
   scale_color_manual(values = c("red2", "green4")) + 
   scale_fill_manual(values = c("red2", "green4")) + 
   theme_bw() + 
@@ -450,7 +459,10 @@ weight_trace_plots <- list()
 
 for(i in 1:length(desired_weight_vars)){
   var <- desired_weight_vars[i]
-  weight_trace_plots[[desired_weight_vars[i]]] <- markov_chain_samples(fit, var) %>% 
+  weight_trace_plots[[var]] <- markov_chain_samples(fit, 
+                                                    var, 
+                                                    burn_in = MCMC_INPUTS$BURN_IN, 
+                                                    iters=MCMC_INPUTS$ITER) %>% 
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
 }
 
@@ -461,7 +473,10 @@ hp_trace_plots = list()
 
 for(i in 1:length(desired_hp_vars)){
   var <- desired_hp_vars[i]
-  hp_trace_plots[[desired_hp_vars[i]]] <- markov_chain_samples(fit, var) %>% 
+  hp_trace_plots[[desired_hp_vars[i]]] <- markov_chain_samples(fit, 
+                                                               var, 
+                                                               burn_in = MCMC_INPUTS$BURN_IN, 
+                                                               iters=MCMC_INPUTS$ITER) %>% 
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = MCMC_INPUTS$BURN_IN - 10) + 
     coord_trans(y = "log10")
 }
