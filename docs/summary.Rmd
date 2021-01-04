@@ -7,7 +7,6 @@ output:
     theme: "boxes"
     slide_level: 4
     toc: true
-    number_sections: true
 ---
 
 ```{r setup, include=FALSE}
@@ -44,7 +43,7 @@ knitr::opts_chunk$set(echo = FALSE, fig.align="center")
 
 ![Prior Distributions](priors.png){width=225px, height=225px}
 
-# Experiment 1 (Vague Priors)
+# Experiment 1 (0.05:0.5)
 
 #### Assumptions
 
@@ -52,7 +51,8 @@ Architecture:
 
 - 1 hidden layer, 8 hidden units
 - tanh activation 
-- _parameter groups_: input-hidden weights, output-hidden weights, hidden biases, output bias
+- _parameter groups_: input-hidden weights, hidden-output weights, hidden biases, output bias
+- variance of hidden-output weights scaled by number of weights for better limiting behavior
 
 Data:
 
@@ -95,7 +95,7 @@ Hyperparameter Priors (FBM Notation):
 
 ![Predictive Quality](../output/fbm_2021_01_03_18_56_58/y_vs_x.png){width=225px, height=225px}
 
-# Experiment 2 (Less Vague Priors)
+# Experiment 2 (0.05:1)
 
 #### Assumptions
 
@@ -103,7 +103,8 @@ Architecture:
 
 - 1 hidden layer, 8 hidden units
 - tanh activation 
-- _parameter groups_: input-hidden weights, output-hidden weights, hidden biases, output bias
+- _parameter groups_: input-hidden weights, hidden-output weights, hidden biases, output bias
+- variance of hidden-output weights scaled by number of weights for better limiting behavior
 
 Data:
 
@@ -147,7 +148,7 @@ Hyperparameter Priors (FBM Notation):
 ![Predictive Quality](../output/fbm_2021_01_04_12_54_10/y_vs_x.png){width=225px, height=225px}
 
 
-# Experiment 3 (Less Vague Priors)
+# Experiment 3 (0.05:5)
 
 #### Assumptions
 
@@ -155,7 +156,8 @@ Architecture:
 
 - 1 hidden layer, 8 hidden units
 - tanh activation 
-- _parameter groups_: input-hidden weights, output-hidden weights, hidden biases, output bias
+- _parameter groups_: input-hidden weights, hidden-output weights, hidden biases, output bias
+- variance of hidden-output weights scaled by number of weights for better limiting behavior
 
 Data:
 
