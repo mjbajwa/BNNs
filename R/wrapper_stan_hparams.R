@@ -7,30 +7,69 @@ library(ggplot2)
 library(tidyr)
 library(gridExtra)
 
-set.seed(10)
+# Paths -------------------------------------------------------------------
+
+OUTPUT_PATH <- "./output/"
+STAN_FILE <- "./stan/BNN_hparams_dev.stan"
+INPUT_TYPE <- "fbm_example" # power_plant
+SCALE_INPUT <- F
+TRAIN_FRACTION <- 0.5
 
 # User Inputs -------------------------------------------------------------
-  
-OUTPUT_PATH <- "./output/DEBUG/"
-STAN_FILE <- "./stan/BNN_hparams_dev.stan"
 
 # Architecture Design
 
-G <- c(10) 
-INFINITE_LIMIT <- c(1)
+G <- c(8) 
+INFINITE_LIMIT <- c(1) # does not apply to ih weights
 HIERARCHICAL_FLAG_W <- 1
-HIERARCHICAL_FLAG_B <- 0
+HIERARCHICAL_FLAG_B <- 1
+HETEROSCEDASTIC <- 1
+INIT_FUN <- function(...) list(W_sdev=rep(runif(1, 0.05, 1), length(G)+1), 
+                               B_sdev=rep(runif(1, 0.05, 1), length(G) + 1))  # initial values for W and B sdev.
 
 # Prior definition using FBM language
 
 FBM_W <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(3, length(G) + 1))
+              "GAMMA_ALPHA" = rep(0.5, length(G) + 1))
 
 FBM_B <- list("GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-              "GAMMA_ALPHA" = rep(3, length(G) + 1))
+              "GAMMA_ALPHA" = rep(0.5, length(G) + 1))
 
 FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
-              "GAMMA_ALPHA" = rep(6, 1))
+              "GAMMA_ALPHA" = rep(0.5, 1))
+
+# MCMC control for stan
+
+MCMC_INPUTS <- list(
+  "CHAINS" = 4,
+  "CORES" = 4,
+  "ITER" = 2000,
+  "BURN_IN" = 1000
+)
+
+# Constants ---------------------------------------------------------------
+
+set.seed(50)
+folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
+path <- str_c(OUTPUT_PATH, "stan_", folder_name)
+dir.create(path)
+
+INPUTS <- list(
+  "G" = G,
+  "INFINITE_LIMIT" = INFINITE_LIMIT,
+  "HIERARCHICAL_FLAG_W" = HIERARCHICAL_FLAG_W,
+  "HIERARCHICAL_FLAG_B" = HIERARCHICAL_FLAG_B,
+  "HETEROSCEDASTIC" = HETEROSCEDASTIC,
+  "FBM_W" = FBM_W,
+  "FBM_B" = FBM_B,
+  "FBM_Y" = FBM_Y,
+  "INPUT_TYPE" = INPUT_TYPE, 
+  "SCALE_INPUT" = SCALE_INPUT,
+  "TRAIN_FRACTION" = TRAIN_FRACTION,
+  "INIT_VALUES" = INIT_FUN()
+)
+
+capture.output(c(INPUTS, MCMC_INPUTS), file = str_c(path, '/inputs.txt'))
 
 # FBM to Stan Conversion of Prior -------------------------------------------------------
 
@@ -70,28 +109,50 @@ Y_gamma_scale <- Y_STAN$STAN_BETA
 # Check Prior
 
 precision_w <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
-precision_b <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
-precision_y <- rgamma(n=1000, shape=W_gamma_shape[1], scale=1/W_gamma_scale[1])
+precision_b <- rgamma(n=1000, shape=B_gamma_shape[1], scale=1/B_gamma_scale[1])
+precision_y <- rgamma(n=1000, shape=Y_gamma_shape[1], scale=1/Y_gamma_scale[1])
 
+par(mfrow=c(3,1))
 hist(log10(1/sqrt(precision_w)), col="red2", main="Weights (log10 sdev)")
 hist(log10(1/sqrt(precision_b)), col="red2", main="Biases (log10 sdev)")
 hist(log10(1/sqrt(precision_y)), col="red2", main="Measurement Noise (log10 sdev)")
 
 # Load Data -----------------------------------------------------------
 
-df <- data.frame(read.table("./fbm_logs/rdata", header = FALSE))
-colnames(df) <- c("X", "Y")
-target_col <- "Y"
+read_input_data <- function(input_type = "fbm_example|power_plant"){
+  
+  # Load data
+  
+  if(input_type == "fbm_example"){
+    df <- data.frame(read.table("./data/rdata", header = FALSE))
+    colnames(df) <- c("V1", "Y")
+    target_col <- "Y"
+  } else if(input_type == "power_plant") { 
+    df <- read.csv("./data/power-plant.csv", header = TRUE)
+    colnames(df) <- c("V1", "V2", "V3", "V4", "Y")
+    target_col <- "Y"
+  } else {
+    break
+  }
+  return(df)
+}
+
+df <- read_input_data(INPUT_TYPE)
+if(SCALE_INPUT){
+  df <- scale(df)
+}
+
 all_idx <- 1:nrow(df)
-train_idx <- 1:100
+train_idx <- 1:floor(TRAIN_FRACTION*max(all_idx))
 test_idx <- all_idx[!(all_idx %in% train_idx)]
+target_col <- "Y"
 
 # Data pre-processing
 
-X_train <- matrix(df[train_idx, names(df)[!str_detect(string = names(df), target_col)]])
-y_train <- as.vector(matrix(df[train_idx, target_col]))
-X_test <- matrix(df[test_idx, names(df)[!str_detect(string = names(df), target_col)]])
-y_test <- as.vector(matrix(df[test_idx, target_col]))
+X_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(-contains("Y"))
+y_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(contains("Y")) %>% pull()
+X_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(-contains("Y"))
+y_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(contains("Y")) %>% pull()
 N <- nrow(X_train) # number of observations in training data
 K <- ncol(X_train) # number of input features
 N_test <- nrow(X_test) # number of observations in test data
@@ -113,28 +174,26 @@ data = list(
   y_gamma_scale = Y_gamma_scale,
   use_hierarchical_w = HIERARCHICAL_FLAG_W,
   use_hierarchical_b = HIERARCHICAL_FLAG_B,
+  heteroscedastic = HETEROSCEDASTIC, 
   infinite_limit = array(INFINITE_LIMIT)
 )
 
 # Call Stan ---------------------------------------------------------------
 
+INIT_FUN <- function(...) list(W_sdev=rep(0.05, length(G)+1), B_sdev=rep(0.05, length(G) + 1))
+
 fit <- stan(
   file = STAN_FILE,   
   data = data,  
-  chains = 4, 
-  warmup = 1000, 
-  iter = 2000, 
-  cores = 6, 
+  init = INIT_FUN,
+  chains = MCMC_INPUTS$CHAINS, 
+  warmup = MCMC_INPUTS$BURN_IN, 
+  iter = MCMC_INPUTS$ITER, 
+  cores = MCMC_INPUTS$CORES, 
   refresh = 1,
   verbose = TRUE,
-  seed = 1,
+  seed = 3,
 )
-
-# Create dir to save outputs of the run
-
-folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
-path <- str_c(OUTPUT_PATH, folder_name)
-dir.create(path)
 
 # Utility Functions -------------------------------------------------------
 
@@ -179,7 +238,9 @@ markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=
   
   # Create empty dataframe to save results
   
-  df_chains <- as_tibble(matrix(data=0, nrow = 2000, ncol=4))
+  # TODO: expose out 2000
+  
+  df_chains <- as_tibble(matrix(data=0, nrow = iters, ncol=4))
   names(df_chains) <- as.vector(unlist(lapply(as.list(1:n_chains), function(x){paste("chain_", x, sep="")})))
   
   # Loop through each chain and extract the samples
@@ -201,7 +262,8 @@ markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=
     tidyr::pivot_longer(!time_index) %>% 
     group_by(time_index) %>%
     summarize(mean_chains = mean(value),
-              sdev_chains = sd(value))
+              sdev_chains = sd(value)) %>% 
+    ungroup()
   
   # Join the summary with final
   
@@ -215,14 +277,14 @@ markov_chain_samples <- function(stan_fit, var, n_chains=4, burn_in=1000, iters=
   
 }
 
-mcmc_trace_plot <- function(df_mcmc_param, var, burn_in=1000){
+mcmc_trace_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0){
   
   df_plot <- df_mcmc_param %>% 
     select(time_index, contains("chain_")) %>% 
     tidyr::pivot_longer(!time_index, names_to = "chain") %>% 
-    mutate(stationary = ifelse(time_index > 1000, T, F))
+    mutate(stationary = ifelse(time_index > burn_in, T, F))
   
-  ggplot(df_plot) +
+  ggplot(df_plot %>% filter(time_index > min_time)) +
     geom_point(aes(x = time_index, y = value, color = chain, alpha = stationary), size=0.5) + 
     scale_alpha_manual(values=c(0.05, 1)) + 
     geom_vline(xintercept = burn_in,
@@ -308,20 +370,21 @@ pred_actual_plot <- ggplot(df_post_preds) +
   facet_wrap(label~., scales = "free_x") + 
   ggtitle("Predicted vs. Actual")
 
-yx_filtered_plot <- ggplot(df_post_preds %>% filter(X_V1 > -2.2)) + 
-  geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
-  geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
-  geom_point(aes(x = X_V1, y = actual), color = "black", alpha = 0.2, size = 2) + 
-  scale_color_manual(values = c("red2", "green3")) + 
-  theme_bw() + 
-  xlab("X") + 
-  ylab("Y (Predicted)") + 
-  theme(text = element_text(size=16)) + 
-  ggtitle("Y vs. X", subtitle = "Filtered X < -2.2")
+# yx_filtered_plot <- ggplot(df_post_preds %>% filter(X_V1 > -2.2)) + 
+#   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
+#   geom_point(aes(x = X_V1, y = mean, color=label), alpha = 0.5, size = 2) + 
+#   geom_point(aes(x = X_V1, y = actual), color = "black", alpha = 0.2, size = 2) + 
+#   scale_color_manual(values = c("red2", "green3")) + 
+#   theme_bw() + 
+#   xlab("X") + 
+#   ylab("Y (Predicted)") + 
+#   theme(text = element_text(size=16)) + 
+#   ggtitle("Y vs. X", subtitle = "Filtered X < -2.2")
 
 yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) + 
   geom_ribbon(aes(x = X_V1, ymin =`2.5%`, ymax= `97.5%`, fill=label), alpha = 0.3) + 
-  geom_point(aes(x = X_V1, y = actual, color=label), alpha = 0.5, size = 2) + 
+  geom_point(aes(x = X_V1, y = actual), alpha = 0.5, color="black", size = 1.5, alpha = 0.5) + 
+  geom_line(aes(x = X_V1, y = mean, color=label), size = 0.8, alpha = 0.4) + 
   scale_color_manual(values = c("red2", "green4")) + 
   scale_fill_manual(values = c("red2", "green4")) + 
   theme_bw() + 
@@ -331,13 +394,10 @@ yx_unfiltered_plot <- ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) +
   facet_wrap(label~., scales = "free") + 
   ggtitle("Y vs. X")
 
-df_post_preds$Rhat %>% hist(col = "red2")
-
-# Extremely Paradoxical.... Why do the predictions feel good but the actual parameters end up diverging?
+par(mfrow=c(1,1))
+df_post_preds$Rhat %>% hist(col = "red2", main="R-hat distribution for predicted values of y")
 
 # Trace Plot Analysis of MCMC for weights/biases ---------------------------------------------
-
-# Parsing the distribution of weights in a clean way ---
 
 weights_parsed <- parse_stan_vars(hidden_weights_names, "W", 3)
 W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 1, column_names = c("layer"))
@@ -355,26 +415,70 @@ df_weights_posterior <- weights_parsed %>%
 df_biases_posterior <- biases_parsed %>% 
   left_join(df_stan_summary, by = "stan_var_name")
 
-# Parse out important weight parameters 
-# TODO: Do this in a more generalizable way
+df_hyperparams_posterior <- W_sdev_parsed %>% 
+  bind_rows(W_precision_parsed) %>% 
+  left_join(df_stan_summary, by = "stan_var_name")
 
-layer_1_weights <- df_weights_posterior %>% 
-  filter(layer == 1,
-         incoming_neuron == 1) %>% 
-  pull(stan_var_name)
+# Parse out important weight parameters (that are not redundant)
 
-layer_2_weights <- df_weights_posterior %>% 
-  filter(layer == 2,
-         outgoing_neuron == 1) %>% 
-  pull(stan_var_name)
+desired_weight_vars <- c()
 
-desired_weight_vars <- c(layer_1_weights, layer_2_weights)
-weight_trace_plots = list()
+for(l in 1:(length(G) + 1)){
+  
+  # Define vector of incoming hidden unit by layer
+  
+  if(l == 1){
+    previous_hidden_units = 1:ncol(X_train)
+  } else {
+    previous_hidden_units = 1:G[l-1]
+  }
+  
+  # Define vector of outgoing hidden unit by layer
+  
+  if(l == length(G) + 1){
+    next_hidden_units = 1
+  } else {
+    next_hidden_units = 1:G[l]
+  }
+  
+  # Define weights of layers
+  
+  layer_weights <- df_weights_posterior %>% 
+    filter(layer == l,
+           incoming_neuron %in% previous_hidden_units,
+           outgoing_neuron %in% next_hidden_units) %>% 
+    pull(stan_var_name)
+  
+  desired_weight_vars <- c(desired_weight_vars, layer_weights)
+  
+}
+
+# Trace Plots for Weights
+
+weight_trace_plots <- list()
 
 for(i in 1:length(desired_weight_vars)){
   var <- desired_weight_vars[i]
-  weight_trace_plots[[i]] <- markov_chain_samples(fit, var) %>% 
-    mcmc_trace_plot(var, burn_in = 1000)
+  weight_trace_plots[[var]] <- markov_chain_samples(fit, 
+                                                    var, 
+                                                    burn_in = MCMC_INPUTS$BURN_IN, 
+                                                    iters=MCMC_INPUTS$ITER) %>% 
+    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
+}
+
+# Trace Plots for Hyperparameters
+
+desired_hp_vars <- df_hyperparams_posterior$stan_var_name
+hp_trace_plots = list()
+
+for(i in 1:length(desired_hp_vars)){
+  var <- desired_hp_vars[i]
+  hp_trace_plots[[desired_hp_vars[i]]] <- markov_chain_samples(fit, 
+                                                               var, 
+                                                               burn_in = MCMC_INPUTS$BURN_IN, 
+                                                               iters=MCMC_INPUTS$ITER) %>% 
+    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = MCMC_INPUTS$BURN_IN - 10) + 
+    coord_trans(y = "log10")
 }
 
 # Save Results ------------------------------------------------------------
@@ -386,24 +490,55 @@ ggsave(str_c(path, "/predicted_vs_actual.png"),
        width = 11,
        height = 8)
 
-ggsave(str_c(path, "/y_vs_x_filtered.png"),
-       yx_filtered_plot,
-       width = 11,
-       height = 8)
-
 ggsave(str_c(path, "/y_vs_x_unfiltered.png"),
        yx_unfiltered_plot,
        width = 11,
        height = 8)
 
-# Weight Plots
+# Save Weight Trace Plots  
 
-png(str_c(path, "/weights_ih.png"), width = 14, height = 8, units = "in", res=50)
-do.call("grid.arrange", c(weight_trace_plots[1:8], 
-                          ncol = floor(sqrt(length(weight_trace_plots)))))
+png(str_c(path, "/", "w_inputs_to_layers", ".png"), width = 20, height = 12, units = "in", res=100)
+do.call("grid.arrange", weight_trace_plots)
 dev.off()
 
-png(str_c(path, "/weights_ho.png"), width = 14, height = 8, units = "in", res=50)
-do.call("grid.arrange", c(weight_trace_plots[9:16], 
-        ncol = floor(sqrt(length(weight_trace_plots)))))
+# Save Hyperparameter Trace Plots  
+
+png(str_c(path, "/", "hp_traces", ".png"), width = 20, height = 12, units = "in", res=100)
+do.call("grid.arrange", hp_trace_plots)
 dev.off()
+
+# Get Rejection Rate ------------------------------------------------------
+
+sampler_params <- get_sampler_params(fit, inc_warmup = FALSE)
+df_samples <- tibble()
+
+for(chain in 1:length(sampler_params)){
+    
+  df_temp <- sampler_params[[chain]] %>% as_tibble() %>% mutate(chain = chain)
+  df_samples <- df_samples %>% bind_rows(df_temp)
+  
+}
+
+df_plot_stats_mean <- df_samples %>% 
+  group_by(chain) %>% 
+  summarise_all(.funs=list("mean" = mean))
+
+df_plot_stats <- df_samples %>% 
+  pivot_longer(cols=c("accept_stat__", "stepsize__", "treedepth__", "n_leapfrog__", "divergent__", "energy__"))
+
+chain_statistics <- df_plot_stats %>%
+  mutate(chain = as.character(chain)) %>% 
+  ggplot() + 
+  geom_boxplot(aes(x = chain, y = value, fill = name), alpha=0.5) + 
+  facet_wrap(name~., scales = "free") + 
+  theme_bw() + 
+  ylab("") + 
+  ggtitle("Markov chain Monte Carlo - statistics of key attributes for NUTS") + 
+  theme(text = element_text(size=14), 
+        legend.position = "none")
+
+capture.output(df_plot_stats_mean, file = str_c(path, '/chain_stats.txt'))
+ggsave(str_c(path, "/chain_statistics.png"),
+       chain_statistics,
+       width = 11,
+       height = 8)
