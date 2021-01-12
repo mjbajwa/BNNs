@@ -1,5 +1,4 @@
 // Bayesian Neural Network 
-// 1. To modify activation functions, change "tanh" on line 43, 48 to a bounded function of your choice
 // 2. Prior structure on weights and biases: W[L, i, j] ~ normal(0, sig[L]^2); 1/sig^2 ~ gamma(shape, rate). Single level hierarchy assumed.
 
 data {
@@ -22,20 +21,23 @@ data {
   vector[h+1] B_gamma_shape;
   vector[h+1] B_gamma_scale;
   
-  // Parameters for gamma priors on the noise level of outputs y
+  // Parameters for gamma priors on the noise level of outputs y (only used if fix_target_noise == 0)
   
   real y_gamma_shape;
   real y_gamma_scale;
   
-  // Flag for using Hierarchical on weights and biases
+  // Flag for using Hierarchical on weights and biases 
   
   int<lower=0, upper=1> use_hierarchical_w; 
   int<lower=0, upper=1> use_hierarchical_b;
-  int<lower=0, upper=1> heteroscedastic; 
-  
+
   // Flag for scaling sdev by number of hidden units in the layer (per Neal 1995) for convergence
   
   int<lower=0, upper=1> infinite_limit[h];
+  
+  // Flag for fixing target noise
+  
+  int<lower=0, upper=1> fix_target_noise;
   
 }
 
@@ -52,29 +54,24 @@ parameters {
   
   // Standard Deviation of likelihood
   
-  vector<lower=0>[heteroscedastic ? N : 1] y_sdev;
+  real<lower=0> y_prec;
 
   // Standard Deviation of Weights and biases
   
-  vector<lower=0>[h+1] W_sdev;
-  vector<lower=0>[h+1] B_sdev;
+  vector<lower=0>[h+1] W_prec;
+  vector<lower=0>[h+1] B_prec; // <lower=1e-6, upper=1e6>[
   
 }
 
 transformed parameters {
   
-  // Define precision terms (1/sigma^2)
-  vector[h+1] W_prec;
-  vector[h+1] B_prec;
-  vector[heteroscedastic ? N : 1] y_prec;
 
   // Intermediate quantities
   matrix[max(G), h] z[N]; // outputs of hidden layers. Array index by oberservation
   vector[N] y_train_pred;
   
   // *** Forward Pass of Neural Network ***
-  // TODO: use matrix-multiplication to speed this up.
-  
+
   // Loop over all observations
   for(n in 1:N) {
   
@@ -102,25 +99,6 @@ transformed parameters {
   for(n in 1:N)
     y_train_pred[n] = sum(z[n][1:G[h], h].*W[h+1][1:G[h], 1]) + B[1, h+1];
     
-  // *** Precision transformation ***
-  
-  // Weight and biases sdev (useful weights only)
-  
-  for(l in 1:(h+1)){
-    W_prec[l] = 1/(W_sdev[l]^2);
-    B_prec[l] = 1/(W_sdev[l]^2);
-  }
-  
- // Standard deviation of targets
- 
- if(heteroscedastic == 1){
-   for(n in 1:N){
-     y_prec[n] = 1/(y_sdev[n]^2);
-   }
- } else {
-    y_prec[1] = 1/(y_sdev[1]^2);
- }
-    
 }
 
 
@@ -128,14 +106,11 @@ model {
 
   // ****** Likelihood function and measurement noise ******
   
-  if(heteroscedastic == 1){
-    for(n in 1:N){
-      y_prec[n] ~ gamma(y_gamma_shape, y_gamma_scale);
-      y_train[n] ~ normal(y_train_pred[n], y_sdev[n]);
-    }
+  if(fix_target_noise == 1){
+    y_train ~ normal(y_train_pred, 0.1);
   } else {
-      y_prec[1] ~ gamma(y_gamma_shape, y_gamma_scale);
-      y_train ~ normal(y_train_pred, y_sdev[1]);
+    y_prec ~ gamma(y_gamma_shape, y_gamma_scale);
+    y_train ~ normal(y_train_pred, sqrt(1 / y_prec));
   }
   
   // ***** Apply proper priors on all sdev and precision variables *****
@@ -143,8 +118,7 @@ model {
   // ****** Direct Priors on Useful Weights ******
   
   // Priors on weights (USEFUL weights only)
-  // For each layer, precisions are sampled from a common prior distribution (gamma)
-  
+
   for(l in 1:(h+1)){
     // 1st hidden layer
     if(l == 1){ 
@@ -152,9 +126,9 @@ model {
         for(g_out in 1:G[l]){
           W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
           if(use_hierarchical_w == 1){
-            W[l][g_in, g_out] ~ normal(0, W_sdev[l]); 
+            W[l][g_in, g_out] ~ normal(0, 1/sqrt(W_prec[l])); 
           } else {
-            W[l][g_in, g_out] ~ normal(0, 1);
+            W[l][g_in, g_out] ~ normal(0, 100);
           }
         }
       }
@@ -164,12 +138,12 @@ model {
         W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]);
         if(use_hierarchical_w == 1){
           if(infinite_limit[l-1] == 1){
-            W[l][g_in, 1] ~ normal(0, sqrt(1.0/G[l-1])*W_sdev[l]); 
+            W[l][g_in, 1] ~ normal(0, sqrt(1.0/G[l-1])*1/sqrt(W_prec[l])); 
           } else {
-            W[l][g_in, 1] ~ normal(0, W_sdev[l]);
+            W[l][g_in, 1] ~ normal(0, 1/sqrt(W_prec[l]));
           }
         } else {
-             W[l][g_in, 1] ~ normal(0, 1);
+             W[l][g_in, 1] ~ normal(0, 100);
           }
         }
     } else {
@@ -179,12 +153,12 @@ model {
           W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
           if(use_hierarchical_w == 1){
             if(infinite_limit[l] == 1){
-              W[l][g_in, g_out] ~ normal(0, sqrt(1.0/G[l])*W_sdev[l]); 
+              W[l][g_in, g_out] ~ normal(0, sqrt(1.0/G[l])*1/sqrt(W_prec[l])); 
             } else {
-              W[l][g_in, g_out] ~ normal(0, W_sdev[l]); 
+              W[l][g_in, g_out] ~ normal(0, 1/sqrt(W_prec[l])); 
             }
         } else {
-            W[l][g_in, g_out] ~ normal(0, 1);
+            W[l][g_in, g_out] ~ normal(0, 100);
           }
         }
       }
@@ -196,47 +170,23 @@ model {
   for(l in 1:(h+1)){
     if (l == h+1){
       // For the output Layer -- only one bias term matters
-      B_sdev[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
+      B_prec[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
       if(use_hierarchical_b == 1){
-        B[1, l] ~ normal(0, B_sdev[l]);
+        B[1, l] ~ normal(0, 100); // B[1, l] ~ normal(0, B_sdev[l])
       } else {
-        B[1, l] ~ normal(0, 1);
+        B[1, l] ~ normal(0, 100);
       }
     } else {
       // For all other layers, index only on useful weights
       for(g in 1:G[l]) {
-        B_sdev[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
+        B_prec[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
         if(use_hierarchical_b == 1){
-          B[g, l] ~ normal(0, B_sdev[l]);
+          B[g, l] ~ normal(0, 1/sqrt(B_prec[l]));
         } else {
-          B[g, l] ~ normal(0, 1);
+          B[g, l] ~ normal(0, 100);
         }
       }
     }
-  }
-  
-  // ****** Jacobian adjustments ******  
-  
-  // Required because we're applying a prior to (prec = 1/(sdev^2)).
-  
-  if(use_hierarchical_w == 1){
-    for(l in 1:(h+1)){
-      target += log(2) - 3*log(W_sdev[l]);
-    }
-  }
-  
-  if(use_hierarchical_b == 1){
-    for(l in 1:(h+1)){
-      target += log(2) - 3*log(B_sdev[l]);
-    }
-  }
-  
-  if(heteroscedastic == 1){
-    for(n in 1:N){
-      target += log(2) - 3*log(y_sdev[n]);
-    }
-  } else {
-    target += log(2) - 3*log(y_sdev[1]);
   }
 
   // ****** Priors on Non-Useful Weights ****** // Keep these hard-coded for now
@@ -247,17 +197,17 @@ model {
     if(l == 1){
       for(g_in in (K+1):rows(W[l])){
         for(g_out in (G[l]+1):cols(W[l])){
-          W[l][g_in, g_out] ~ normal(0, 10);
+          W[l][g_in, g_out] ~ normal(0, 100);
         }
       }
     } else if (l == h+1){
       for(g_in in (G[l-1]+1):rows(W[l])) {
-          W[l][g_in, 1] ~ normal(0, 10);
+          W[l][g_in, 1] ~ normal(0, 100);
         }
     } else {
       for(g_in in (G[l-1]+1):rows(W[l])) {
         for(g_out in (G[l]+1):cols(W[l])){
-          W[l][g_in, g_out] ~ normal(0, 10);
+          W[l][g_in, g_out] ~ normal(0, 100);
         }
       }
     }
@@ -268,12 +218,12 @@ model {
   for(l in 1:(h+1)){
     if (l == h+1){
       for(g in 2:rows(B)){
-        B[g, l] ~ normal(0, 10);
+        B[g, l] ~ normal(0, 100);
       }
     } else {
       // For all other layers, index only on useful weights
       for(g in (G[l]+1):rows(B)) {
-        B[g, l] ~  normal(0, 10);
+        B[g, l] ~  normal(0, 100);
       }
     }
   }
@@ -282,7 +232,9 @@ model {
 
 generated quantities {
   
+  vector[N] y_train_pred_final;
   vector[N_test] y_test_pred;
+  vector[N_test] y_test_mean;
   matrix[max(G), h] z_test[N_test]; 
 
   // Loop over all observations
@@ -306,12 +258,31 @@ generated quantities {
     
   }
   
-  // Final Layer Mean estimation
+  // Final Layer - estimation of the final prediction
   
-  for(n in 1:N_test)
-    y_test_pred[n] = sum(z_test[n][1:G[h], h].*W[h+1][1:G[h], 1]) + B[1, h+1];
-
+  for(n in 1:N_test){
+    
+    // Mean Prediction
+    
+    y_test_mean[n] = sum(z_test[n][1:G[h], h].*W[h+1][1:G[h], 1]) + B[1, h+1];
+    
+    // Measurement Noise
+    
+    if(fix_target_noise == 1){
+      y_test_pred[n] = normal_rng(y_test_mean[n], 0.1);
+    } else {
+      y_test_pred[n] = normal_rng(y_test_mean[n], sqrt(1 / y_prec));
+    }
+  }
+  
+  // Incorporate measurement noise in training predictions as well
+  
+  for(n in 1:N){
+    if(fix_target_noise == 1){
+      y_train_pred_final[n] = normal_rng(y_train_pred[n], 0.1);
+    } else {
+      y_train_pred_final[n] = normal_rng(y_train_pred[n], sqrt(1 / y_prec));
+    }
+  }
   
 }
-
-  
