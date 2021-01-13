@@ -2,19 +2,19 @@
 
 # Example FBM - BNN configuration file
 
-net-spec rlog.net 1 8 1 / ih=0.05:5 bh=0.05:5 ho=x0.05:5 bo=0.05:5
+net-spec rlog.net 1 8 1 / ih=0.05:5 bh=0.05:5 ho=x0.05:5 bo=100
 model-spec rlog.net real 0.05:5
 net-spec rlog.net
 data-spec rlog.net 1 1 / rdata@1:100 . rdata@101:200 .
 net-gen rlog.net fix 0.05  
-mc-spec rlog.net repeat 10 sample-noise heatbath hybrid 100:10 0.1
+mc-spec rlog.net repeat 10 sample-noise heatbath hybrid 100:10 0.2
 net-mc rlog.net 1
 
 printf "Rejection Rate: \n\n"
 net-plt t r rlog.net
 
 printf "Gibbs sampling hyperparameters, and HMC on weights/biases \n\n";
-mc-spec rlog.net sample-sigmas heatbath hybrid 1000:10 0.1
+mc-spec rlog.net sample-sigmas heatbath hybrid 1000:10 0.4
 net-mc rlog.net 10000
 
 # Plot for analyzing everything is doing what it should...

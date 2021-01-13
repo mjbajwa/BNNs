@@ -54,12 +54,12 @@ parameters {
   
   // Standard Deviation of likelihood
   
-  real<lower=0> y_prec;
+  real<lower=1e-4> y_prec;
 
   // Standard Deviation of Weights and biases
   
-  vector<lower=0>[h+1] W_prec;
-  vector<lower=0>[h+1] B_prec; // <lower=1e-6, upper=1e6>[
+  vector<lower=1e-6>[h+1] W_prec;
+  vector<lower=1e-6>[h+1] B_prec; // <lower=1e-6, upper=1e6>[
   
 }
 
@@ -138,7 +138,7 @@ model {
         W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]);
         if(use_hierarchical_w == 1){
           if(infinite_limit[l-1] == 1){
-            W[l][g_in, 1] ~ normal(0, sqrt(1.0/G[l-1])*1/sqrt(W_prec[l])); 
+            W[l][g_in, 1] ~ normal(0, sqrt(1.0/G[l-1]) * 1/sqrt(W_prec[l])); 
           } else {
             W[l][g_in, 1] ~ normal(0, 1/sqrt(W_prec[l]));
           }
