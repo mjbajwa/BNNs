@@ -11,7 +11,7 @@ library(reshape2)
 # Paths -------------------------------------------------------------------
 
 OUTPUT_PATH <- "./output/"
-STAN_FILE <- "./stan/BNN_hparams_dev.stan"
+STAN_FILE <- "./stan/BNN_hparams_reparam.stan" # "./stan/BNN_hparams_dev.stan"
 INPUT_TYPE <- "fbm_example" # power_plant
 SCALE_INPUT <- F
 TRAIN_FRACTION <- 0.5
@@ -28,11 +28,11 @@ FIX_TARGET_NOISE <- 0
 
 INIT_FUN <- function(...) {
   list(
-    W_prec = rep(1e-2, length(G) + 1),
-    B_prec = rep(1e-2, length(G) + 1),
-    y_prec = 1e+02,
-    W = array(runif(1,-0.5, 0.5), dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-    B = array(runif(1,-10, 10), dim = c(max(max(G), 1), length(G) + 1))
+    W_prec = rep(0.05, length(G) + 1),
+    B_prec = rep(0.05, length(G) + 1),
+    y_prec = 1e+04,
+    W_raw = array(runif(1,-5e-6, 5e-6), dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
+    B_raw = array(runif(1,-5e-6, 5e-6), dim = c(max(max(G), 1), length(G) + 1))
   )
   
 }
@@ -60,11 +60,11 @@ MCMC_INPUTS <- list(
   "ITER" = 2000,
   "BURN_IN" = 1000,
   "CONTROL" = list(
-    max_treedepth = 11,
+    max_treedepth = 10,
     adapt_gamma = 0.05,
-    adapt_kappa = 0.80,
-    adapt_t0 = 1,
-    adapt_delta = 0.70
+    adapt_kappa = 0.75,
+    adapt_t0 = 10,
+    adapt_delta = 0.50
   )
 )
 
@@ -353,7 +353,7 @@ mcmc_trace_plot <-
         alpha = stationary
       ),
       size = 0.5) +
-      scale_alpha_manual(values = c(0.05, 1)) +
+      scale_alpha_manual(values = c(0.20, 1)) +
       geom_vline(xintercept = burn_in,
                  linetype = 2) +
       theme_bw() +
@@ -455,7 +455,13 @@ yx_filtered_plot <-
     ymin = `2.5%`,
     ymax = `97.5%`,
     fill = label
-  ), alpha = 0.3) +
+  ), alpha = 0.1) +
+  geom_ribbon(aes(
+    x = X_V1,
+    ymin = `25%`,
+    ymax = `75%`,
+    fill = label
+  ), alpha = 0.2) +
   geom_point(
     aes(x = X_V1, y = actual),
     alpha = 0.5,
@@ -479,7 +485,13 @@ yx_unfiltered_plot <-
     ymin = `2.5%`,
     ymax = `97.5%`,
     fill = label
-  ), alpha = 0.3) +
+  ), alpha = 0.1) +
+  geom_ribbon(aes(
+    x = X_V1,
+    ymin = `25%`,
+    ymax = `75%`,
+    fill = label
+  ), alpha = 0.2) +
   geom_point(
     aes(x = X_V1, y = actual),
     alpha = 0.5,
@@ -691,7 +703,7 @@ for (chain in 1:length(sampler_params)) {
   
 }
 
-chain_tracking <- ggplot(df_samples %>% filter(iter %in% 100:2000)) +
+stepsize_plots <- ggplot(df_samples %>% filter(iter %in% 100:2000)) +
   geom_line(aes(x = iter, y = stepsize__, color = chain),
             alpha = 0.8) +
   theme_bw() +
@@ -700,8 +712,8 @@ chain_tracking <- ggplot(df_samples %>% filter(iter %in% 100:2000)) +
   ylab("Step Size")
 
 ggsave(
-  str_c(path, "/chain_tracking.png"),
-  chain_tracking,
+  str_c(path, "/stepsize_plots.png"),
+  stepsize_plots,
   width = 11,
   height = 8
 )
