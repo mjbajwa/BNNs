@@ -54,12 +54,12 @@ parameters {
   
   // Standard Deviation of likelihood
   
-  real<lower=1e-3> y_prec;
+  real<lower=0> y_prec;
 
   // Standard Deviation of Weights and biases
   
-  vector<lower=1e-3>[h+1] W_prec;
-  vector<lower=1e-3>[h+1] B_prec; // <lower=1e-6, upper=1e6>[
+  vector<lower=0>[h+1] W_prec;
+  vector<lower=0>[h+1] B_prec; // <lower=1e-6, upper=1e6>[
   
 }
 
@@ -78,9 +78,9 @@ transformed parameters {
   matrix[max(G), h] z[N]; // outputs of hidden layers. Array index by oberservation
   vector[N] y_train_pred;
     
-  // *** Parameter Mapping ***
+  // *** Re-parametrization ***
 
-  // ****** Direct Mapping of Useful Weights ******
+  // ****** Useful Weights ******
 
   for(l in 1:(h+1)){
     // 1st hidden layer
@@ -125,7 +125,7 @@ transformed parameters {
     }
   }
   
-  // Priors on intercepts (USEFUL intercepts only for each column of the B matrix)
+  // Useful Intercepts
   
   for(l in 1:(h+1)){
     if (l == h+1){
@@ -171,52 +171,50 @@ transformed parameters {
     
   }
   
-  // Final Layer. TODO: Make this multi-output friendly.
+  // Final Layer - TODO: Make this multi-output friendly.
   
   for(n in 1:N)
     y_train_pred[n] = sum(z[n][1:G[h], h].*W[h+1][1:G[h], 1]) + B[1, h+1];
   
   // Dealing with Non-useful weights
+
+  // // Weights
+  // 
+  // for(l in 1:(h+1)){
+  //   if(l == 1){
+  //     for(g_in in (K+1):rows(W[l])){
+  //       for(g_out in (G[l]+1):cols(W[l])){
+  //         W[l][g_in, g_out] = 100 * W_raw[l][g_in, g_out];
+  //       }
+  //     }
+  //   } else if (l == h+1){
+  //     for(g_in in (G[l-1]+1):rows(W[l])) {
+  //         W[l][g_in, 1] = 100 * W_raw[l][g_in, 1];
+  //       }
+  //   } else {
+  //     for(g_in in (G[l-1]+1):rows(W[l])) {
+  //       for(g_out in (G[l]+1):cols(W[l])){
+  //         W[l][g_in, g_out] = 100 * W_raw[l][g_in, g_out];
+  //       }
+  //     }
+  //   }
+  // }
+  // 
+  // // Intercepts
+  // 
+  // for(l in 1:(h+1)){
+  //   if (l == h+1){
+  //     for(g in 2:rows(B)){
+  //       B[g, l] = 100 * B_raw[g, l];
+  //     }
+  //   } else {
+  //     // For all other layers, index only on useful weights
+  //     for(g in (G[l]+1):rows(B)) {
+  //       B[g, l] = 100 * B_raw[g, l];
+  //     }
+  //   }
+  // }
   
-  // ****** Priors on Non-Useful Weights ****** // Keep these hard-coded for now
-
-  // Weights
-
-  for(l in 1:(h+1)){
-    if(l == 1){
-      for(g_in in (K+1):rows(W[l])){
-        for(g_out in (G[l]+1):cols(W[l])){
-          W[l][g_in, g_out] = 100 * W_raw[l][g_in, g_out];
-        }
-      }
-    } else if (l == h+1){
-      for(g_in in (G[l-1]+1):rows(W[l])) {
-          W[l][g_in, 1] = 100 * W_raw[l][g_in, 1];
-        }
-    } else {
-      for(g_in in (G[l-1]+1):rows(W[l])) {
-        for(g_out in (G[l]+1):cols(W[l])){
-          W[l][g_in, g_out] = 100 * W_raw[l][g_in, g_out];
-        }
-      }
-    }
-  }
-
-  // Intercepts
-
-  for(l in 1:(h+1)){
-    if (l == h+1){
-      for(g in 2:rows(B)){
-        B[g, l] = 100 * B_raw[g, l];
-      }
-    } else {
-      // For all other layers, index only on useful weights
-      for(g in (G[l]+1):rows(B)) {
-        B[g, l] = 100 * B_raw[g, l];
-      }
-    }
-  }
-    
 }
 
 
@@ -224,11 +222,18 @@ model {
 
   // ****** Likelihood function and measurement noise ******
   
+  // if(fix_target_noise == 1){
+  //   y_train ~ normal(y_train_pred, 0.1);
+  // } else {
+  //   y_prec ~ gamma(y_gamma_shape, y_gamma_scale);
+  //   y_train ~ normal(y_train_pred, sqrt(1 / y_prec));
+  // }
+  
   if(fix_target_noise == 1){
-    y_train ~ normal(y_train_pred, 0.1);
+    target += normal_lpdf(y_train | y_train_pred, 0.1);
   } else {
     y_prec ~ gamma(y_gamma_shape, y_gamma_scale);
-    y_train ~ normal(y_train_pred, sqrt(1 / y_prec));
+    target += normal_lpdf(y_train | y_train_pred, 1 / sqrt(y_prec));
   }
   
   // ****** Direct Priors on Useful Weights ******
@@ -281,40 +286,40 @@ model {
 
   // Weights
 
-  for(l in 1:(h+1)){
-    if(l == 1){
-      for(g_in in (K+1):rows(W[l])){
-        for(g_out in (G[l]+1):cols(W[l])){
-          W_raw[l][g_in, g_out] ~ std_normal();
-        }
-      }
-    } else if (l == h+1){
-      for(g_in in (G[l-1]+1):rows(W[l])) {
-          W_raw[l][g_in, 1] ~ std_normal();
-        }
-    } else {
-      for(g_in in (G[l-1]+1):rows(W[l])) {
-        for(g_out in (G[l]+1):cols(W[l])){
-          W_raw[l][g_in, g_out] ~ std_normal();
-        }
-      }
-    }
-  }
-
-  // Intercepts
-
-  for(l in 1:(h+1)){
-    if (l == h+1){
-      for(g in 2:rows(B)){
-        B_raw[g, l] ~ std_normal();
-      }
-    } else {
-      // For all other layers, index only on useful weights
-      for(g in (G[l]+1):rows(B)) {
-        B_raw[g, l] ~ std_normal();
-      }
-    }
-  }
+  // for(l in 1:(h+1)){
+  //   if(l == 1){
+  //     for(g_in in (K+1):rows(W[l])){
+  //       for(g_out in (G[l]+1):cols(W[l])){
+  //         W_raw[l][g_in, g_out] ~ std_normal();
+  //       }
+  //     }
+  //   } else if (l == h+1){
+  //     for(g_in in (G[l-1]+1):rows(W[l])) {
+  //         W_raw[l][g_in, 1] ~ std_normal();
+  //       }
+  //   } else {
+  //     for(g_in in (G[l-1]+1):rows(W[l])) {
+  //       for(g_out in (G[l]+1):cols(W[l])){
+  //         W_raw[l][g_in, g_out] ~ std_normal();
+  //       }
+  //     }
+  //   }
+  // }
+  // 
+  // // Intercepts
+  // 
+  // for(l in 1:(h+1)){
+  //   if (l == h+1){
+  //     for(g in 2:rows(B)){
+  //       B_raw[g, l] ~ std_normal();
+  //     }
+  //   } else {
+  //     // For all other layers, index only on useful weights
+  //     for(g in (G[l]+1):rows(B)) {
+  //       B_raw[g, l] ~ std_normal();
+  //     }
+  //   }
+  // }
     
 }
 

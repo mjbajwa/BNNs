@@ -7,11 +7,12 @@ library(ggplot2)
 library(tidyr)
 library(gridExtra)
 library(reshape2)
+set.seed(50)
 
 # Paths -------------------------------------------------------------------
 
 OUTPUT_PATH <- "./output/"
-STAN_FILE <- "./stan/BNN_hparams_reparam.stan" # "./stan/BNN_hparams_dev.stan"
+STAN_FILE <- "./stan/BNN_hparams_reparam.stan" # "./stan/BNN_hparams_reparam.stan" or "./stan/BNN_hparams_dev.stan"
 INPUT_TYPE <- "fbm_example" # power_plant
 SCALE_INPUT <- F
 TRAIN_FRACTION <- 0.5
@@ -28,11 +29,13 @@ FIX_TARGET_NOISE <- 0
 
 INIT_FUN <- function(...) {
   list(
-    W_prec = rep(0.05, length(G) + 1),
-    B_prec = rep(0.05, length(G) + 1),
-    y_prec = 1e+04,
+    W_prec = rep(1, length(G) + 1),
+    B_prec = rep(1, length(G) + 1),
+    y_prec = 1e+02,
+    # W = array(runif(1,-5e-6, 5e-6), dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
+    # B = array(runif(1,-5e-3, 5e-3), dim = c(max(max(G), 1), length(G) + 1))
     W_raw = array(runif(1,-5e-6, 5e-6), dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-    B_raw = array(runif(1,-5e-6, 5e-6), dim = c(max(max(G), 1), length(G) + 1))
+    B_raw = array(runif(1,-5e-3, 5e-3), dim = c(max(max(G), 1), length(G) + 1))
   )
   
 }
@@ -60,17 +63,16 @@ MCMC_INPUTS <- list(
   "ITER" = 2000,
   "BURN_IN" = 1000,
   "CONTROL" = list(
-    max_treedepth = 10,
-    adapt_gamma = 0.05,
+    max_treedepth = 11, # Default is 10 
+    adapt_gamma = 0.01, # Default is 0.05
     adapt_kappa = 0.75,
     adapt_t0 = 10,
-    adapt_delta = 0.50
+    adapt_delta = 0.9 # Default is 0.8 (Increased because of Langevin may be over-estimating step-size for good sampling)
   )
 )
 
 # Constants ---------------------------------------------------------------
 
-set.seed(50)
 folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
 path <- str_c(OUTPUT_PATH, "stan_", folder_name)
 dir.create(path)
@@ -152,6 +154,7 @@ hist(log10(1 / sqrt(precision_y)), col = "red2", main = "Measurement Noise (log1
 # Load Data -----------------------------------------------------------
 
 read_input_data <- function(input_type = "fbm_example|power_plant") {
+  
   # Load data
   
   if (input_type == "fbm_example") {
@@ -230,8 +233,8 @@ fit <- stan(
   iter = MCMC_INPUTS$ITER,
   cores = MCMC_INPUTS$CORES,
   verbose = TRUE,
-  refresh = 1,
-  seed = 1,
+  refresh = 10,
+  seed = 42,
   algorithm = "NUTS",
   control = MCMC_INPUTS$CONTROL
 )
@@ -287,12 +290,10 @@ markov_chain_samples <-
     
     # Create empty dataframe to save results
     
-    # TODO: expose out 2000
-    
     df_chains <- as_tibble(matrix(
       data = 0,
       nrow = iters,
-      ncol = 4
+      ncol = n_chains
     ))
     names(df_chains) <-
       as.vector(unlist(lapply(as.list(1:n_chains), function(x) {
@@ -717,4 +718,44 @@ ggsave(
   width = 11,
   height = 8
 )
-  
+
+# Traces by plots
+
+# Trace Plots for Weights
+
+df_weights_traces <- list()
+
+for (i in 1:length(desired_weight_vars)) {
+  var <- desired_weight_vars[i]
+  df_weights_traces <- df_weights_traces %>%
+    bind_rows(
+      markov_chain_samples(fit,
+                           var,
+                           burn_in = MCMC_INPUTS$BURN_IN,
+                           iters = MCMC_INPUTS$ITER)
+      )
+}
+
+df_weights_traces <- df_weights_traces %>% 
+  left_join(df_weights_posterior, by = c("var" = "stan_var_name"))
+
+df_plot <- df_weights_traces %>%
+  select(time_index, contains("chain_"), var, layer, stationary) %>%
+  reshape2::melt(id.vars = c("time_index", "layer", "var", "stationary")) %>% 
+  as_tibble() %>% 
+  rename("chain" = "variable") %>% 
+  mutate(chain = as.integer(str_remove(chain, "chain_")))
+
+ggplot(df_plot %>% filter(time_index > 0)) +
+  geom_point(aes(x = time_index, y = value, color = var, alpha = stationary), size = 0.2) + 
+  scale_alpha_manual(values = c(0.20, 1)) +
+  geom_vline(xintercept = 1000,
+             linetype = 2) +
+  viridis::scale_color_viridis(discrete = T) + 
+  theme_bw() +
+  xlab("") +
+  ylab("") +
+  facet_grid(layer~chain, scales = "free") + 
+  theme(text = element_text(size = 16),
+        legend.position = "none")
+

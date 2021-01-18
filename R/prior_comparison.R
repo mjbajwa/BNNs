@@ -1,12 +1,12 @@
-priors <- function(alpha = 0.5, label="Experiment 1"){
+priors <- function(width = 0.05, alpha = 0.5, label="Experiment 1"){
   
-  FBM_W <- list("GAMMA_WIDTH" = rep(0.05, 1),
+  FBM_W <- list("GAMMA_WIDTH" = rep(width, 1),
                 "GAMMA_ALPHA" = rep(alpha, 1))
   
-  FBM_B <- list("GAMMA_WIDTH" = rep(0.05, 1),
+  FBM_B <- list("GAMMA_WIDTH" = rep(width, 1),
                 "GAMMA_ALPHA" = rep(alpha, 1))
   
-  FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
+  FBM_Y <- list("GAMMA_WIDTH" = rep(width, 1),
                 "GAMMA_ALPHA" = rep(alpha, 1))
   
   fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha){
@@ -55,9 +55,9 @@ priors <- function(alpha = 0.5, label="Experiment 1"){
   
 }
 
-df <- priors(alpha = 0.5, label = "Experiment 1") %>% 
-  bind_rows(priors(alpha=1, label="Experiment 2")) %>% 
-  bind_rows(priors(alpha=5, label="Experiment 3")) %>% 
+df <- priors(0.5, 0.75, "Experiment 1") %>% 
+  bind_rows(priors(0.5, 0.5, "Experiment 2")) %>% 
+  bind_rows(priors(0.1, 5, "Experiment 3")) %>% 
   pivot_longer(!label, names_to = "vars")
 
 ggplot(df) + 

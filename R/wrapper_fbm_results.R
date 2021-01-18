@@ -94,7 +94,7 @@ for(id in upper_group_id){
     tidyr::pivot_longer(!t, names_to = "vars")
   
   upper_level_group_traces[[id]] <- ggplot(df_plot) +
-    geom_point(aes(x = t, y = value, color = vars, alpha=t), size=1., color="green3") + 
+    geom_point(aes(x = t, y = value, color = vars, alpha=t), size=1,) + 
     theme_bw() + 
     ggtitle(str_c("FBM group id: ", id)) + 
     xlab("") + 
@@ -129,3 +129,39 @@ dev.off()
 png(str_c(path, "/", "upper_level_traces", ".png"), width = 20, height = 12, units = "in", res=100)
 do.call("grid.arrange", upper_level_group_traces)
 dev.off()
+
+# Step Sizes --------------------------------------------------------------
+
+df_stepsizes <- list()
+
+for(iter in seq(1000, 2000, 100)){
+
+  df_stepsizes[[iter]] <- read.table(str_c("./fbm_logs/results/stepsizes_", as.character(iter), ".txt"), 
+                                     header = FALSE, blank.lines.skip = TRUE, skip = 7, nrows = 25) %>% 
+    janitor::clean_names() %>% 
+    as_tibble() %>% 
+    rename(coord = v1, stepsize = v2) %>% 
+    mutate(iteration = iter)
+  
+}
+
+df_stepsizes <- df_stepsizes %>% 
+  bind_rows() %>% 
+  mutate(group = case_when(
+    coord %in% 0:7 ~ "1",
+    coord %in% 8:15 ~ "2",
+    coord %in% 16:24 ~ "3"
+  )) %>% 
+  group_by(group, iteration) %>% 
+  summarize(stepsize = mean(stepsize))
+
+# ggplot(df_stepsizes) + 
+#   geom_density(aes(x = stepsize, fill = group), alpha = 0.3, color = "black") + 
+#   theme_bw() + 
+#   theme(text = element_text(size = 18))
+
+df_stepsizes %>% 
+  group_by(group) %>% 
+  summarize(mean_stepsize = mean(stepsize),
+            sdev_stepsize = sd(stepsize)/mean_stepsize*100)
+

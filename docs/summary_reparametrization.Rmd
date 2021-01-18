@@ -1,0 +1,162 @@
+---
+title: "BNN Hyperparameters Integration: Gibbs vs. NUTS"
+# author: "Jamal Bajwa"
+date: "01/01/2021"
+output: 
+  beamer_presentation:    
+    theme: "boxes"
+    slide_level: 2
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.align="center")
+```
+
+# Overview
+
+## Overview
+
+Three experiments:
+
+- NUTS (Centered Parametrization)
+- NUTS (Non-Centered Parametrization)
+- FBM (Gibbs sampling for hyperparameters, HMC)
+
+## Centered vs. Non-Centered Parametrization
+
+- Centered: $$f(W | \mu, \tau) = Normal(\mu, \tau^{-0.5})$$
+- Non-Centered: $$W = \mu + \tau^{-0.5}W_{norm}, f(W_{norm}) = Normal(0, 1)$$
+- Applies to all low-level weights and biases
+
+## Global Assumptions
+
+Architecture:
+
+- 1 hidden layer, 8 hidden units
+- tanh activation 
+- _parameter groups_: input-hidden weights, hidden-output weights, hidden biases, output bias
+- variance of hidden-output weights scaled by number of weights for better limiting behavior
+
+Data:
+
+- from FBM example 
+- input dimensions = 1, output dimensions = 1
+
+Hyperparameter Priors (FBM Notation):
+
+- input-hidden weights hyperparameter: 0.05:0.5
+- hidden-output weights hyperparameter: 0.05:0.5 
+- hidden layer biases hyperparameter: 0.05:0.5
+- output bias hyperparameter: 100
+- target noise: 0.05:0.5
+
+## NUTS-specific Assumptions
+
+Tuning Parameters: 
+
+- `adapt_delta`: 0.9 (default = 0.8)
+- `max_treedepth`: 11 (default = 10)
+- `adapt_gamma`: 0.01 (default = 0.05)
+
+Initial Values:
+
+- `Weight Precision`: 1
+- `Biases Precision`: 1
+- `Target Noise Precision`: 100
+- `Weights`: Uniform(-5e-6, +5e-6) 
+- `Biases`: Uniform(-5e-3, +5e-3)
+
+Note that for both centered and non-centered parametrization, the exact same initial values were used.
+
+# NUTS (Centered Parametrization)
+
+## NUTS (Centered) - Test Set Predictions
+
+![Predictive Quality](../output/stan_2021_01_18_09_48_35/y_vs_x_unfiltered.png){width=225px, height=225px}
+
+## NUTS (Centered) - Weight Traces
+
+![Weight Traces](../output/stan_2021_01_18_09_48_35/w_inputs_to_layers.png){width=225px, height=225px}
+
+## NUTS (Centered) - Hyperparameter Traces
+
+![Hyperparameter Traces](../output/stan_2021_01_18_09_48_35/hp_traces.png){width=225px, height=225px}
+
+## NUTS (Centered) - Chain statistics
+
+![Chain Stepsizes](../output/stan_2021_01_18_09_48_35/stepsize_plots.png){width=225px, height=225px}
+
+## NUTS (Centered) - Chain statistics
+
+![Chain Statistics](../output/stan_2021_01_18_09_48_35/chain_statistics.png){width=225px, height=225px}
+
+
+# NUTS (Non-Centered Parametrization)
+
+## NUTS (Non-Centered) - Test Set Predictions
+
+![Predictive Quality](../output/stan_2021_01_18_09_54_18/y_vs_x_unfiltered.png){width=225px, height=225px}
+
+## NUTS (Non-Centered) - Weight Traces
+
+![Weight Traces](../output/stan_2021_01_18_09_54_18/w_inputs_to_layers.png){width=225px, height=225px}
+
+## NUTS (Non-Centered) - Hyperparameter Traces
+
+![Hyperparameter Traces](../output/stan_2021_01_18_09_54_18/hp_traces.png){width=225px, height=225px}
+
+## NUTS (Non-Centered) - Chain statistics
+
+![Chain Stepsizes](../output/stan_2021_01_18_09_54_18/stepsize_plots.png){width=225px, height=225px}
+
+## NUTS (Non-Centered) - Chain statistics
+
+![Chain Statistics](../output/stan_2021_01_18_09_54_18/chain_statistics.png){width=225px, height=225px}
+
+# FBM
+
+## FBM (Non-Centered) - Test Set Predictions
+
+![Predictive Quality](../output/fbm_2021_01_18_11_48_45/y_vs_x.png){width=225px, height=225px}
+
+## FBM (Non-Centered) - Weight Traces
+
+![Weight Traces](../output/fbm_2021_01_18_11_48_45/low_level_traces.png){width=225px, height=225px}
+
+## NUTS (Non-Centered) - Hyperparameter Traces
+
+![Hyperparameter Traces](../output/fbm_2021_01_18_11_48_45/upper_level_traces.png){width=225px, height=225px}
+
+# Step size comparison
+
+## Step size comparison
+
+```{r echo = FALSE, results = "stepsizes"} 
+
+library(knitr)
+suppressMessages(library(dplyr))
+suppressMessages(library(kableExtra))
+
+mean_centered <- c(0.0100, 0.0554, 0.0414, 0.000176)
+mean_noncentered <- c(0.00000312, 0.00000104, 0.00000144, 0.000000585)
+fbm_w1 <- c(0.000378)
+fbm_w2 <- c(0.000357)
+fbm_b1 <- c(0.00883)
+
+df_stepsizes <- tibble(
+  "Average Stepsize" = c(mean(mean_centered), mean(mean_noncentered), fbm_w1, fbm_w2, fbm_b1),
+  "Standard Deviation (stepsize) - % of mean" = c(0, 0, 25.7, 25.2, 7.06)
+) %>% 
+  as.data.frame()
+
+rownames(df_stepsizes) <- c("Centered NUTS", "Non-Centered Nuts", "FBM (Group 1)", "FBM (Group 2)", "FBM (Group 3)")
+
+df_stepsizes["Average Stepsize"] <- format(df_stepsizes["Average Stepsize"], digits = 3)
+
+kable(df_stepsizes, caption = "Step Size comparison", format = "latex") %>% 
+  kable_styling(latex_options="scale_down")
+
+```
+
+
