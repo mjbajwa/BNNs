@@ -120,6 +120,8 @@ model {
     target += normal_lpdf(y_train | y_train_pred, 1 / sqrt(y_prec));
   }
   
+  // y_prec ~ gamma(y_gamma_shape, y_gamma_scale);
+  
   // ***** Apply proper priors on all sdev and precision variables *****
   
   // ****** Direct Priors on Useful Weights ******
@@ -128,10 +130,10 @@ model {
 
   for(l in 1:(h+1)){
     // 1st hidden layer
-    if(l == 1){ 
+    if(l == 1){
+      W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
       for(g_in in 1:K){
         for(g_out in 1:G[l]){
-          W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
           if(use_hierarchical_w == 1){
             W[l][g_in, g_out] ~ normal(0, 1/sqrt(W_prec[l])); 
           } else {
@@ -141,8 +143,8 @@ model {
       }
     } else if (l == h+1) {            
       // Output Layer
+      W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]);
       for(g_in in 1:G[l-1]) {
-        W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]);
         if(use_hierarchical_w == 1){
           if(infinite_limit[l-1] == 1){
             W[l][g_in, 1] ~ normal(0, sqrt(1.0/G[l-1]) * 1/sqrt(W_prec[l])); 
@@ -155,9 +157,9 @@ model {
         }
     } else {
       // Hidden layers not connected to input/output
+      W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
       for(g_in in 1:G[l-1]) {
         for(g_out in 1:G[l]){
-          W_prec[l] ~ gamma(W_gamma_shape[l], W_gamma_scale[l]); 
           if(use_hierarchical_w == 1){
             if(infinite_limit[l] == 1){
               W[l][g_in, g_out] ~ normal(0, sqrt(1.0/G[l])*1/sqrt(W_prec[l])); 
@@ -177,7 +179,6 @@ model {
   for(l in 1:(h+1)){
     if (l == h+1){
       // For the output Layer -- only one bias term matters
-      B_prec[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
       if(use_hierarchical_b == 1){
         B[1, l] ~ normal(0, 100); // B[1, l] ~ normal(0, B_sdev[l])
       } else {
@@ -185,8 +186,8 @@ model {
       }
     } else {
       // For all other layers, index only on useful weights
+      B_prec[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
       for(g in 1:G[l]) {
-        B_prec[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
         if(use_hierarchical_b == 1){
           B[g, l] ~ normal(0, 1/sqrt(B_prec[l]));
         } else {

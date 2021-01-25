@@ -32,8 +32,8 @@ INIT_FUN <- function(...) {
     W_prec = rep(1, length(G) + 1),
     B_prec = rep(1, length(G) + 1),
     y_prec = 1e+02,
-    # W = array(runif(1,-5e-6, 5e-6), dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-    # B = array(runif(1,-5e-3, 5e-3), dim = c(max(max(G), 1), length(G) + 1))
+    W = array(runif(1,-5e-6, 5e-6), dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
+    B = array(runif(1,-5e-3, 5e-3), dim = c(max(max(G), 1), length(G) + 1)),
     W_raw = array(runif(1,-5e-6, 5e-6), dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
     B_raw = array(runif(1,-5e-3, 5e-3), dim = c(max(max(G), 1), length(G) + 1))
   )
@@ -63,11 +63,11 @@ MCMC_INPUTS <- list(
   "ITER" = 2000,
   "BURN_IN" = 1000,
   "CONTROL" = list(
-    max_treedepth = 11, # Default is 10 
-    adapt_gamma = 0.01, # Default is 0.05
+    max_treedepth = 10, # Default is 10 -- 11
+    adapt_gamma = 0.05, # Default is 0.05 -- 0.01
     adapt_kappa = 0.75,
     adapt_t0 = 10,
-    adapt_delta = 0.9 # Default is 0.8 (Increased because of Langevin may be over-estimating step-size for good sampling)
+    adapt_delta = 0.8 # Default is 0.8 (Increased because of Langevin may be over-estimating step-size for good sampling) -- 0.9
   )
 )
 
@@ -99,6 +99,7 @@ capture.output(c(INPUTS, MCMC_INPUTS), file = str_c(path, '/inputs.txt'))
 # TODO: add to utils.R
 
 fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha) {
+  
   # TODO: check with Prof Neal this re-parametrization is correct.
   
   mean_precision = 1 / (fbm_width ^ 2)
@@ -116,35 +117,23 @@ fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha) {
 
 # Shape = alpha, Scale = beta
 
-W_STAN <-
-  fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH, FBM_W$GAMMA_ALPHA)
+W_STAN <- fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH, FBM_W$GAMMA_ALPHA)
 W_gamma_shape <- W_STAN$STAN_ALPHA
 W_gamma_scale <- W_STAN$STAN_BETA
 
-B_STAN <-
-  fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
+B_STAN <- fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
 B_gamma_shape <- B_STAN$STAN_ALPHA
 B_gamma_scale <- B_STAN$STAN_BETA
 
-Y_STAN <-
-  fbm_gamma_params_to_stan(FBM_Y$GAMMA_WIDTH, FBM_Y$GAMMA_ALPHA)
+Y_STAN <- fbm_gamma_params_to_stan(FBM_Y$GAMMA_WIDTH, FBM_Y$GAMMA_ALPHA)
 Y_gamma_shape <- Y_STAN$STAN_ALPHA
 Y_gamma_scale <- Y_STAN$STAN_BETA
 
 # Check Prior
 
-precision_w <-
-  rgamma(n = 1000,
-         shape = W_gamma_shape[1],
-         scale = 1 / W_gamma_scale[1])
-precision_b <-
-  rgamma(n = 1000,
-         shape = B_gamma_shape[1],
-         scale = 1 / B_gamma_scale[1])
-precision_y <-
-  rgamma(n = 1000,
-         shape = Y_gamma_shape[1],
-         scale = 1 / Y_gamma_scale[1])
+precision_w <- rgamma(n = 1000, shape = W_gamma_shape[1], scale = 1 / W_gamma_scale[1])
+precision_b <- rgamma(n = 1000, shape = B_gamma_shape[1], scale = 1 / B_gamma_scale[1])
+precision_y <- rgamma(n = 1000, shape = Y_gamma_shape[1], scale = 1 / Y_gamma_scale[1])
 
 par(mfrow = c(3, 1))
 hist(log10(1 / sqrt(precision_w)), col = "red2", main = "Weights (log10 sdev)")
@@ -158,16 +147,19 @@ read_input_data <- function(input_type = "fbm_example|power_plant") {
   # Load data
   
   if (input_type == "fbm_example") {
+    
     df <- data.frame(read.table("./data/rdata", header = FALSE))
     colnames(df) <- c("V1", "Y")
     target_col <- "Y"
     
   } else if (input_type == "power_plant") {
+    
     df <- read.csv("./data/power-plant.csv", header = TRUE)
     colnames(df) <- c("V1", "V2", "V3", "V4", "Y")
     target_col <- "Y"
     
   } else {
+    
     break
     
   }
@@ -189,14 +181,10 @@ target_col <- "Y"
 
 # Data pre-processing
 
-X_train <-
-  df %>% as_tibble() %>% slice(train_idx) %>% select(-contains("Y"))
-y_train <-
-  df %>% as_tibble() %>% slice(train_idx) %>% select(contains("Y")) %>% pull()
-X_test <-
-  df %>% as_tibble() %>% slice(-train_idx) %>% select(-contains("Y"))
-y_test <-
-  df %>% as_tibble() %>% slice(-train_idx) %>% select(contains("Y")) %>% pull()
+X_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(-contains("Y"))
+y_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(contains("Y")) %>% pull()
+X_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(-contains("Y"))
+y_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(contains("Y")) %>% pull()
 N <- nrow(X_train) # number of observations in training data
 K <- ncol(X_train) # number of input features
 N_test <- nrow(X_test) # number of observations in test data
@@ -281,6 +269,7 @@ markov_chain_samples <-
            n_chains = 4,
            burn_in = 1000,
            iters = 2000) {
+    
     #' Example input values
     
     # n_chains = 4
@@ -335,36 +324,57 @@ markov_chain_samples <-
     
   }
 
-mcmc_trace_plot <-
-  function(df_mcmc_param,
-           var,
-           burn_in = 1000,
-           min_time = 0) {
-    df_plot <- df_mcmc_param %>%
+mcmc_trace_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) {
+    
+  df_plot <- df_mcmc_param %>%
       select(time_index, contains("chain_")) %>%
       # tidyr::pivot_longer(time_index, names_to = "chain") %>%
       reshape2::melt(id.vars = "time_index",) %>%
       mutate(stationary = ifelse(time_index > burn_in, T, F))
     
-    ggplot(df_plot %>% filter(time_index > min_time)) +
-      geom_point(aes(
-        x = time_index,
-        y = value,
-        color = variable,
-        alpha = stationary
-      ),
-      size = 0.5) +
-      scale_alpha_manual(values = c(0.20, 1)) +
-      geom_vline(xintercept = burn_in,
-                 linetype = 2) +
-      theme_bw() +
-      ggtitle(str_c(unique(df_mcmc_param$var))) +
-      xlab("") +
-      ylab("") +
-      theme(text = element_text(size = 16),
-            legend.position = "none")
-    
-  }
+  ggplot(df_plot %>% filter(time_index > min_time)) +
+    geom_point(aes(
+      x = time_index,
+      y = value,
+      color = variable,
+      alpha = stationary
+    ),
+    size = 0.5) +
+    scale_alpha_manual(values = c(0.20, 1)) +
+    geom_vline(xintercept = burn_in,
+               linetype = 2) +
+    theme_bw() +
+    ggtitle(str_c(unique(df_mcmc_param$var))) +
+    xlab("") +
+    ylab("") +
+    theme(text = element_text(size = 16),
+          legend.position = "none")
+  
+}
+
+mcmc_density_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) {
+  
+  df_plot <- df_mcmc_param %>%
+    select(time_index, contains("chain_")) %>%
+    # tidyr::pivot_longer(time_index, names_to = "chain") %>%
+    reshape2::melt(id.vars = "time_index",) %>%
+    mutate(stationary = ifelse(time_index > burn_in, T, F))
+  
+  ggplot(df_plot %>% filter(time_index > burn_in)) +
+    geom_density(aes(
+      x = value,
+      color = variable,
+      alpha = 0.5
+    ),
+    size = 0.5) +
+    theme_bw() +
+    ggtitle(str_c(unique(df_mcmc_param$var))) +
+    xlab("") +
+    ylab("") +
+    theme(text = element_text(size = 16),
+          legend.position = "none")
+  
+}
 
 # Postprocessing -------------------------------------------------------------
 
@@ -436,7 +446,7 @@ df_post_preds <- df_post_train %>%
   bind_rows(df_post_test)
 
 pred_actual_plot <- ggplot(df_post_preds) +
-  geom_point(aes(x = actual, y = mean, color = label),
+  geom_point(aes(x = actual, y = `50%`, color = label),
              alpha = 0.5,
              size = 2) +
   geom_linerange(aes(x = actual, ymin = `2.5%`, ymax = `97.5%`), alpha = 0.5) +
@@ -469,7 +479,7 @@ yx_filtered_plot <-
     color = "black",
     size = 1.5
   ) +
-  geom_line(aes(x = X_V1, y = mean, color = label),
+  geom_line(aes(x = X_V1, y = `50%`, color = label),
             size = 0.8,
             alpha = 0.4) +
   scale_color_manual(values = c("red2", "green3")) +
@@ -497,10 +507,9 @@ yx_unfiltered_plot <-
     aes(x = X_V1, y = actual),
     alpha = 0.5,
     color = "black",
-    size = 1.5,
-    alpha = 0.5
+    size = 1.5
   ) +
-  geom_line(aes(x = X_V1, y = mean, color = label),
+  geom_line(aes(x = X_V1, y = `50%`, color = label),
             size = 0.8,
             alpha = 0.4) +
   scale_color_manual(values = c("red2", "green4")) +
@@ -578,29 +587,47 @@ for (l in 1:(length(G) + 1)) {
 # Trace Plots for Weights
 
 weight_trace_plots <- list()
+weight_density_plots <- list()
 
 for (i in 1:length(desired_weight_vars)) {
+  
   var <- desired_weight_vars[i]
+  
   weight_trace_plots[[var]] <- markov_chain_samples(fit,
                                                     var,
                                                     burn_in = MCMC_INPUTS$BURN_IN,
                                                     iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
+  
+  weight_density_plots[[var]] <- markov_chain_samples(fit,
+                                                    var,
+                                                    burn_in = MCMC_INPUTS$BURN_IN,
+                                                    iters = MCMC_INPUTS$ITER) %>%
+    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
 }
 
 
 # Trace Plots for Hyperparameters
 
 desired_hp_vars <- df_hyperparams_posterior$stan_var_name
-hp_trace_plots = list()
+hp_trace_plots <- list()
+hp_density_plots <- list()
 
 for (i in 1:length(desired_hp_vars)) {
   var <- desired_hp_vars[i]
+  
   hp_trace_plots[[desired_hp_vars[i]]] <- markov_chain_samples(fit,
                                                                var,
                                                                burn_in = MCMC_INPUTS$BURN_IN,
                                                                iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
+  
+  hp_density_plots[[var]] <- markov_chain_samples(fit,
+                                                      var,
+                                                      burn_in = MCMC_INPUTS$BURN_IN,
+                                                      iters = MCMC_INPUTS$ITER) %>%
+    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
+  
 }
 
 # Save Results ------------------------------------------------------------
@@ -758,4 +785,3 @@ ggplot(df_plot %>% filter(time_index > 0)) +
   facet_grid(layer~chain, scales = "free") + 
   theme(text = element_text(size = 16),
         legend.position = "none")
-
