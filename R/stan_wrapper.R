@@ -7,12 +7,13 @@ library(ggplot2)
 library(tidyr)
 library(gridExtra)
 library(reshape2)
+library(readr)
 set.seed(42)
 
 # Paths -------------------------------------------------------------------
 
 OUTPUT_PATH <- "./output/"
-STAN_FILE <- "./stan/BNN_hparams_reparam.stan" # "./stan/BNN_hparams_reparam.stan" or "./stan/BNN_hparams_dev.stan"
+STAN_FILE <- "./stan/bnns_noncentered.stan"
 INPUT_TYPE <- "fbm_example" # power_plant
 SCALE_INPUT <- F
 TRAIN_FRACTION <- 0.5
@@ -238,9 +239,11 @@ parse_stan_vars <- function(vars,
                             stan_pattern = "W",
                             index_dim = 3,
                             column_names = c("layer", "incoming_neuron", "outgoing_neuron")) {
+  
   #' Parses stan variables
   
   temp <- str_replace(vars, str_c(stan_pattern, "\\["), "") %>%
+    str_replace(str_c(stan_pattern, "_raw", "\\["), "") %>% 
     str_replace("\\]", "") %>%
     str_split(",", n = index_dim) %>%
     lapply(function(x) {
@@ -266,19 +269,11 @@ parse_stan_vars <- function(vars,
   
 }
 
-markov_chain_samples <-
-  function(stan_fit,
-           var,
-           n_chains = 4,
-           burn_in = 1000,
-           iters = 2000) {
-    
-    #' Example input values
-    
-    # n_chains = 4
-    # burn_in = 1000
-    # iters = 2000
-    # var = "W[1,1,1]"
+markov_chain_samples <- function(stan_fit,
+                                 var,
+                                 n_chains = 4,
+                                 burn_in = 1000,
+                                 iters = 2000) {
     
     # Create empty dataframe to save results
     
@@ -308,7 +303,6 @@ markov_chain_samples <-
     df_chains["time_index"] = 1:nrow(df_chains)
     
     df_chain_summary <- df_chains %>%
-      # tidyr::pivot_longer(time_index) %>%
       reshape2::melt(id.vars = "time_index") %>%
       group_by(time_index) %>%
       summarize(mean_chains = mean(value),
@@ -325,13 +319,12 @@ markov_chain_samples <-
     
     return(df_chains)
     
-  }
+}
 
 mcmc_trace_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) {
     
   df_plot <- df_mcmc_param %>%
       select(time_index, contains("chain_")) %>%
-      # tidyr::pivot_longer(time_index, names_to = "chain") %>%
       reshape2::melt(id.vars = "time_index",) %>%
       mutate(stationary = ifelse(time_index > burn_in, T, F))
     
@@ -350,7 +343,7 @@ mcmc_trace_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) {
     ggtitle(str_c(unique(df_mcmc_param$var))) +
     xlab("") +
     ylab("") +
-    theme(text = element_text(size = 18),
+    theme(text = element_text(size = 20),
           legend.position = "none")
   
 }
@@ -359,7 +352,6 @@ mcmc_density_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) 
   
   df_plot <- df_mcmc_param %>%
     select(time_index, contains("chain_")) %>%
-    # tidyr::pivot_longer(time_index, names_to = "chain") %>%
     reshape2::melt(id.vars = "time_index",) %>%
     mutate(stationary = ifelse(time_index > burn_in, T, F))
   
@@ -374,7 +366,7 @@ mcmc_density_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) 
     ggtitle(str_c(unique(df_mcmc_param$var))) +
     xlab("") +
     ylab("") +
-    theme(text = element_text(size = 18),
+    theme(text = element_text(size = 20),
           legend.position = "none")
   
 }
@@ -391,33 +383,24 @@ df_stan_summary <- stan_summary$summary %>%
 
 # Weight Parameter Names
 
-hidden_weights_names <-
-  all_parameters[stringr::str_detect(all_parameters, "W") &
-                   !stringr::str_detect(all_parameters, "W_gamma|W_sdev|W_prec")]
+hidden_weights_names <- all_parameters[stringr::str_detect(all_parameters, "W") & 
+                                         !stringr::str_detect(all_parameters, "W_gamma|W_sdev|W_prec")]
 
 # Biases Parameter Names
 
-hidden_biases_names <-
-  all_parameters[stringr::str_detect(all_parameters, "B") &
-                   !stringr::str_detect(all_parameters, "B_gamma|B_sdev|B_prec")]
+hidden_biases_names <- all_parameters[stringr::str_detect(all_parameters, "B") & 
+                                        !stringr::str_detect(all_parameters, "B_gamma|B_sdev|B_prec")]
 
 # Weight Standard Deviation (names)
 
-# W_sdev_names <- all_parameters[stringr::str_detect(all_parameters, "W_sdev")]
-W_precision_names <-
-  all_parameters[stringr::str_detect(all_parameters, "W_prec")]
-# B_sdev_names <- all_parameters[stringr::str_detect(all_parameters, "B_sdev")]
-B_precision_names <-
-  all_parameters[stringr::str_detect(all_parameters, "B_prec")]
+W_precision_names <- all_parameters[stringr::str_detect(all_parameters, "W_prec")]
+B_precision_names <- all_parameters[stringr::str_detect(all_parameters, "B_prec")]
 
 # predicted values of test set
 
-y_train_names <-
-  all_parameters[str_detect(all_parameters, "y_train_pred_final")]
-y_test_names <-
-  all_parameters[str_detect(all_parameters, "y_test_pred")]
-y_sigma_names <-
-  all_parameters[str_detect(all_parameters, "y_sigma")]
+y_train_names <- all_parameters[str_detect(all_parameters, "y_train_pred_final")]
+y_test_names <- all_parameters[str_detect(all_parameters, "y_test_pred")]
+y_precision_names <- all_parameters[str_detect(all_parameters, "y_prec")]
 
 # Prediction of training and test set ----------------------------------------------------
 
@@ -458,42 +441,12 @@ pred_actual_plot <- ggplot(df_post_preds) +
   theme_bw() +
   xlab("Actual") +
   ylab("Predicted") +
-  theme(text = element_text(size = 16)) +
+  theme(text = element_text(size = 20)) +
   facet_wrap(label ~ ., scales = "free_x") +
   ggtitle("Predicted vs. Actual")
 
-yx_filtered_plot <-
-  ggplot(df_post_preds %>% filter(X_V1 > -2.2, label == "test")) +
-  geom_ribbon(aes(
-    x = X_V1,
-    ymin = `2.5%`,
-    ymax = `97.5%`,
-    fill = label
-  ), alpha = 0.1) +
-  geom_ribbon(aes(
-    x = X_V1,
-    ymin = `25%`,
-    ymax = `75%`,
-    fill = label
-  ), alpha = 0.2) +
-  geom_point(
-    aes(x = X_V1, y = actual),
-    alpha = 0.5,
-    color = "black",
-    size = 1.5
-  ) +
-  geom_line(aes(x = X_V1, y = `50%`, color = label),
-            size = 0.8,
-            alpha = 0.4) +
-  scale_color_manual(values = c("red2", "green3")) +
-  theme_bw() +
-  xlab("X") +
-  ylab("Y (Predicted)") +
-  theme(text = element_text(size = 16)) +
-  ggtitle("Y vs. X", subtitle = "Filtered X < -2.2")
-
 yx_unfiltered_plot <-
-  ggplot(df_post_preds) + #%>% filter(X_V1 > -2.2)) +
+  ggplot(df_post_preds) + 
   geom_ribbon(aes(
     x = X_V1,
     ymin = `2.5%`,
@@ -520,7 +473,7 @@ yx_unfiltered_plot <-
   theme_bw() +
   xlab("X") +
   ylab("Y (Predicted)") +
-  theme(text = element_text(size = 16)) +
+  theme(text = element_text(size = 20)) +
   facet_wrap(label ~ ., scales = "free") +
   ggtitle("Y vs. X")
 
@@ -530,15 +483,9 @@ yx_unfiltered_plot <-
 # Trace Plot Analysis of MCMC for weights/biases ---------------------------------------------
 
 weights_parsed <- parse_stan_vars(hidden_weights_names, "W", 3)
-# W_sdev_parsed <- parse_stan_vars(W_sdev_names, "W_sdev", 1, column_names = c("layer"))
-W_precision_parsed <-
-  parse_stan_vars(W_precision_names, "W_prec", 1, column_names = c("layer"))
-
-biases_parsed <-
-  parse_stan_vars(hidden_biases_names, "B", 2, column_names = c("neuron", "layer"))
-# B_sdev_parsed <- parse_stan_vars(B_sdev_names, "B_sdev", 1, column_names = c("layer"))
-B_precision_parsed <-
-  parse_stan_vars(B_precision_names, "B_prec", 1, column_names = c("layer"))
+W_precision_parsed <- parse_stan_vars(W_precision_names, "W_prec", 1, column_names = c("layer"))
+biases_parsed <- parse_stan_vars(hidden_biases_names, "B", 2, column_names = c("neuron", "layer"))
+B_precision_parsed <- parse_stan_vars(B_precision_names, "B_prec", 1, column_names = c("layer"))
 
 # Weights analysis
 
@@ -548,11 +495,16 @@ df_weights_posterior <- weights_parsed %>%
 df_biases_posterior <- biases_parsed %>%
   left_join(df_stan_summary, by = "stan_var_name")
 
-df_hyperparams_posterior <- W_precision_parsed %>%
-  # bind_rows(W_sdev_parsed) %>%
+df_weights_hp_posterior <- W_precision_parsed %>%
   left_join(df_stan_summary, by = "stan_var_name")
 
-# Parse out important weight parameters (that are not redundant)
+df_biases_hp_posterior <- B_precision_parsed %>%
+  left_join(df_stan_summary, by = "stan_var_name")
+
+df_noise_hp_posterior <- df_stan_summary %>% 
+  filter(str_detect(stan_var_name, "y_prec"))
+
+# Parse out important weight and bias parameters (that are not redundant)
 
 desired_weight_vars <- c()
 
@@ -587,7 +539,33 @@ for (l in 1:(length(G) + 1)) {
   
 }
 
-# Trace Plots for Weights
+desired_bias_vars <- c()
+
+for (l in 1:(length(G) + 1)) {
+  
+  if (l == length(G) + 1) {
+    next_hidden_units = 1
+  } else {
+    next_hidden_units = 1:G[l]
+  }
+  
+  # Define weights of layers
+  
+  layer_weights <- df_biases_posterior %>%
+    filter(
+      layer == l,
+      neuron %in% next_hidden_units,
+    ) %>%
+    filter(!str_detect(stan_var_name, "raw")) %>% 
+    pull(stan_var_name)
+  
+  desired_bias_vars <- c(desired_bias_vars, layer_weights)
+  
+}
+
+# Trace Plots  ------------------------------------------------------------
+
+# Weights
 
 weight_trace_plots <- list()
 weight_density_plots <- list()
@@ -610,28 +588,100 @@ for (i in 1:length(desired_weight_vars)) {
 }
 
 
-# Trace Plots for Hyperparameters
+# Weight hyperparameters
 
-desired_hp_vars <- df_hyperparams_posterior$stan_var_name
-hp_trace_plots <- list()
-hp_density_plots <- list()
+weights_desired_hp_vars <- df_weights_hp_posterior$stan_var_name
+weights_hp_trace_plots <- list()
+weights_hp_density_plots <- list()
 
-for (i in 1:length(desired_hp_vars)) {
-  var <- desired_hp_vars[i]
+for (i in 1:length(weights_desired_hp_vars)) {
   
-  hp_trace_plots[[desired_hp_vars[i]]] <- markov_chain_samples(fit,
+  var <- weights_desired_hp_vars[i]
+  
+  weights_hp_trace_plots[[var]] <- markov_chain_samples(fit,
                                                                var,
                                                                burn_in = MCMC_INPUTS$BURN_IN,
                                                                iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
   
-  hp_density_plots[[var]] <- markov_chain_samples(fit,
+  weights_hp_density_plots[[var]] <- markov_chain_samples(fit,
+                                                  var,
+                                                  burn_in = MCMC_INPUTS$BURN_IN,
+                                                  iters = MCMC_INPUTS$ITER) %>%
+    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
+  
+}
+
+# Biases
+
+bias_trace_plots <- list()
+bias_density_plots <- list()
+
+for (i in 1:length(desired_bias_vars)) {
+  
+  var <- desired_bias_vars[i]
+  
+  bias_trace_plots[[var]] <- markov_chain_samples(fit,
+                                                    var,
+                                                    burn_in = MCMC_INPUTS$BURN_IN,
+                                                    iters = MCMC_INPUTS$ITER) %>%
+    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
+  
+  bias_density_plots[[var]] <- markov_chain_samples(fit,
                                                       var,
                                                       burn_in = MCMC_INPUTS$BURN_IN,
                                                       iters = MCMC_INPUTS$ITER) %>%
     mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
+}
+
+# Bias Hyperparameters
+
+biases_desired_hp_vars <- df_biases_hp_posterior$stan_var_name
+biases_hp_trace_plots <- list()
+biases_hp_density_plots <- list()
+
+for (i in 1:length(biases_desired_hp_vars)) {
+  
+  var <- biases_desired_hp_vars[i]
+  
+  biases_hp_trace_plots[[var]] <- markov_chain_samples(fit,
+                                                               var,
+                                                               burn_in = MCMC_INPUTS$BURN_IN,
+                                                               iters = MCMC_INPUTS$ITER) %>%
+    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
+  
+  biases_hp_density_plots[[var]] <- markov_chain_samples(fit,
+                                                  var,
+                                                  burn_in = MCMC_INPUTS$BURN_IN,
+                                                  iters = MCMC_INPUTS$ITER) %>%
+    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
   
 }
+
+# Target noise
+
+target_noise_hp_vars <- df_noise_hp_posterior$stan_var_name
+target_noise_trace_plots <- list()
+target_noise_density_plots <- list()
+
+for (i in 1:length(target_noise_hp_vars)) {
+  
+  var <- target_noise_hp_vars[i]
+  
+  target_noise_trace_plots[[var]] <- markov_chain_samples(fit,
+                                                                      var,
+                                                                      burn_in = MCMC_INPUTS$BURN_IN,
+                                                                      iters = MCMC_INPUTS$ITER) %>%
+    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
+  
+  target_noise_density_plots[[var]] <- markov_chain_samples(fit,
+                                                         var,
+                                                         burn_in = MCMC_INPUTS$BURN_IN,
+                                                         iters = MCMC_INPUTS$ITER) %>%
+    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
+  
+}
+
 
 # Save Results ------------------------------------------------------------
 
@@ -651,10 +701,10 @@ ggsave(
   height = 8
 )
 
-# Save Weight Trace Plots
+# Weights
 
 png(
-  str_c(path, "/", "w_inputs_to_layers", ".png"),
+  str_c(path, "/", "weight_traces", ".png"),
   width = 20,
   height = 12,
   units = "in",
@@ -664,7 +714,7 @@ do.call("grid.arrange", weight_trace_plots)
 dev.off()
 
 png(
-  str_c(path, "/", "w_inputs_to_layers_density", ".png"),
+  str_c(path, "/", "weight_density", ".png"),
   width = 20,
   height = 12,
   units = "in",
@@ -673,26 +723,92 @@ png(
 do.call("grid.arrange", weight_density_plots)
 dev.off()
 
-# Save Hyperparameter Trace Plots
+# Weights hyperparameters
 
 png(
-  str_c(path, "/", "hp_traces", ".png"),
+  str_c(path, "/", "weights_hp_traces", ".png"),
   width = 20,
   height = 12,
   units = "in",
   res = 100
 )
-do.call("grid.arrange", hp_trace_plots)
+do.call("grid.arrange", weights_hp_trace_plots)
 dev.off()
 
 png(
-  str_c(path, "/", "hp_density", ".png"),
+  str_c(path, "/", "weights_hp_density", ".png"),
   width = 20,
   height = 12,
   units = "in",
   res = 100
 )
-do.call("grid.arrange", hp_density_plots)
+do.call("grid.arrange", weights_hp_density_plots)
+dev.off()
+
+# Biases
+
+png(
+  str_c(path, "/", "biases_traces", ".png"),
+  width = 20,
+  height = 12,
+  units = "in",
+  res = 100
+)
+do.call("grid.arrange", bias_trace_plots)
+dev.off()
+
+png(
+  str_c(path, "/", "biases_density", ".png"),
+  width = 20,
+  height = 12,
+  units = "in",
+  res = 100
+)
+do.call("grid.arrange", bias_density_plots)
+dev.off()
+
+# Biases hyperparameters
+
+png(
+  str_c(path, "/", "biases_hp_traces", ".png"),
+  width = 20,
+  height = 12,
+  units = "in",
+  res = 100
+)
+do.call("grid.arrange", biases_hp_trace_plots)
+dev.off()
+
+png(
+  str_c(path, "/", "biases_hp_density", ".png"),
+  width = 20,
+  height = 12,
+  units = "in",
+  res = 100
+)
+do.call("grid.arrange", biases_hp_density_plots)
+dev.off()
+
+# Target noise
+
+png(
+  str_c(path, "/", "target_noise_trace", ".png"),
+  width = 20,
+  height = 12,
+  units = "in",
+  res = 100
+)
+do.call("grid.arrange", target_noise_trace_plots)
+dev.off()
+
+png(
+  str_c(path, "/", "target_noise_density", ".png"),
+  width = 20,
+  height = 12,
+  units = "in",
+  res = 100
+)
+do.call("grid.arrange", target_noise_density_plots)
 dev.off()
 
 # Get Rejection Rate ------------------------------------------------------
@@ -724,14 +840,15 @@ df_plot_stats <- df_samples %>%
   )
 
 chain_statistics <- df_plot_stats %>%
-  mutate(chain = as.character(chain)) %>%
+  mutate(chain = as.character(chain),
+         name = str_replace(name, "__", "")) %>%
   ggplot() +
   geom_boxplot(aes(x = chain, y = value, fill = name), alpha = 0.5) +
   facet_wrap(name ~ ., scales = "free") +
   theme_bw() +
   ylab("") +
   ggtitle("Markov chain Monte Carlo - statistics of key attributes for NUTS") +
-  theme(text = element_text(size = 14),
+  theme(text = element_text(size = 18),
         legend.position = "none")
 
 capture.output(df_plot_stats_mean, file = str_c(path, '/chain_stats.txt'))
@@ -769,4 +886,22 @@ ggsave(
   height = 8
 )
 
+# Return Object -----------------------------------------------------------
 
+outputs <- list(
+  
+  "stan_file" = STAN_FILE,
+  "inputs" = INPUTS,
+  "outputs" = list(
+    "stan_fit" = fit,
+    "df_predictions" = df_post_preds,
+    "desired_weight_vars" = desired_weight_vars,
+    "desired_weight_vars" = desired_bias_vars,
+    "weights_desired_hp_vars" = weights_desired_hp_vars,
+    "biases_desired_hp_vars" = biases_desired_hp_vars,
+    "target_noise_hp_vars" = target_noise_hp_vars,
+    "df_chain_statistics" = df_samples
+  )
+)
+
+write_rds(outputs, str_c(path, "/outputs.rds"))

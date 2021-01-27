@@ -6,7 +6,7 @@ net-spec rlog.net 1 8 1 / ih=0.05:0.5 bh=0.05:0.5 ho=x0.05:0.5 bo=100
 model-spec rlog.net real 0.05:0.5
 net-spec rlog.net
 data-spec rlog.net 1 1 / rdata@1:100 . rdata@101:200 .
-net-gen rlog.net fix 0.05  
+net-gen rlog.net fix 1 
 mc-spec rlog.net repeat 10 sample-noise heatbath hybrid 100:10 0.2
 net-mc rlog.net 1
 
@@ -26,7 +26,7 @@ net-mc rlog.net 2000
 # Write output to disk
 
 printf "Writing results to disk \n\n";
-net-pred itnq rlog.net 1000:%10 > results/results.txt;
+net-pred itndq rlog.net 1000:%10 > results/results.txt;
 net-tbl tw1@ rlog.net > results/traces_w1.txt;
 net-tbl tw2@ rlog.net > results/traces_w2.txt;
 net-tbl tw3@ rlog.net > results/traces_w3.txt;
