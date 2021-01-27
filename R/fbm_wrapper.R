@@ -13,7 +13,7 @@ df_fbm <- data.frame(read.table("./fbm_logs/results/results.txt", header = FALSE
   janitor::clean_names() %>% 
   as_tibble()
 
-names(df_fbm) <- c("case", "inputs", "targets", "means", "error_2", "x10_qnt", "x90_qnt")
+names(df_fbm) <- c("case", "inputs", "targets", "means", "error_2", "median", "error_median", "x10_qnt", "x90_qnt")
 
 # Load FBM traces
 # TODO: port to fbm_utils.R
@@ -54,7 +54,7 @@ predicted_vs_actual <- ggplot(df_fbm) +
   ggtitle("Predicted vs. Actual (FBM)")
 
 y_vs_x <- ggplot(df_fbm) + #%>% filter(X_V1 > -2.2)) + 
-  geom_ribbon(aes(x = inputs, ymin = x10_qnt, ymax= x90_qnt), fill = "red2", alpha = 0.3) + 
+  geom_ribbon(aes(x = inputs, ymin = x10_qnt, ymax= x90_qnt), fill = "red2", alpha = 0.2) + 
   geom_point(aes(x = inputs, y = targets), alpha = 0.5, color="black", size = 1.5, alpha = 0.5) + 
   geom_line(aes(x = inputs, y = means), color="red2", size = 0.8, alpha = 0.4) + 
   theme_bw() + 

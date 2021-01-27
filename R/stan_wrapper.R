@@ -7,7 +7,7 @@ library(ggplot2)
 library(tidyr)
 library(gridExtra)
 library(reshape2)
-set.seed(50)
+set.seed(42)
 
 # Paths -------------------------------------------------------------------
 
@@ -22,20 +22,21 @@ TRAIN_FRACTION <- 0.5
 # Architecture Design
 
 G <- c(8)
-INFINITE_LIMIT <- c(1) # does not apply to ih weights
+INFINITE_LIMIT <- c(1) 
 HIERARCHICAL_FLAG_W <- 1
 HIERARCHICAL_FLAG_B <- 1
 FIX_TARGET_NOISE <- 0
+SAMPLE_FROM_PRIOR <- 0
 
 INIT_FUN <- function(...) {
   list(
     W_prec = rep(1, length(G) + 1),
     B_prec = rep(1, length(G) + 1),
-    y_prec = 1e+02,
-    W = array(runif(1,-5e-6, 5e-6), dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-    B = array(runif(1,-5e-3, 5e-3), dim = c(max(max(G), 1), length(G) + 1)),
-    W_raw = array(runif(1,-5e-6, 5e-6), dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-    B_raw = array(runif(1,-5e-3, 5e-3), dim = c(max(max(G), 1), length(G) + 1))
+    y_prec = 1,
+    W = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
+    B = array(0, dim = c(max(max(G), 1), length(G) + 1)),
+    W_raw = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
+    B_raw = array(0, dim = c(max(max(G), 1), length(G) + 1))
   )
   
 }
@@ -89,7 +90,8 @@ INPUTS <- list(
   "SCALE_INPUT" = SCALE_INPUT,
   "TRAIN_FRACTION" = TRAIN_FRACTION,
   "INIT_VALUES" = INIT_FUN(),
-  "FIX_TARGET_NOISE" = FIX_TARGET_NOISE
+  "FIX_TARGET_NOISE" = FIX_TARGET_NOISE, 
+  "SAMPLE_FROM_PRIOR" = SAMPLE_FROM_PRIOR
 )
 
 capture.output(c(INPUTS, MCMC_INPUTS), file = str_c(path, '/inputs.txt'))
@@ -207,7 +209,8 @@ data = list(
   use_hierarchical_w = HIERARCHICAL_FLAG_W,
   use_hierarchical_b = HIERARCHICAL_FLAG_B,
   infinite_limit = array(INFINITE_LIMIT),
-  fix_target_noise = FIX_TARGET_NOISE
+  fix_target_noise = FIX_TARGET_NOISE,
+  sample_from_prior = SAMPLE_FROM_PRIOR
 )
 
 # Call Stan ---------------------------------------------------------------
@@ -347,7 +350,7 @@ mcmc_trace_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) {
     ggtitle(str_c(unique(df_mcmc_param$var))) +
     xlab("") +
     ylab("") +
-    theme(text = element_text(size = 16),
+    theme(text = element_text(size = 18),
           legend.position = "none")
   
 }
@@ -371,7 +374,7 @@ mcmc_density_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) 
     ggtitle(str_c(unique(df_mcmc_param$var))) +
     xlab("") +
     ylab("") +
-    theme(text = element_text(size = 16),
+    theme(text = element_text(size = 18),
           legend.position = "none")
   
 }
@@ -660,6 +663,16 @@ png(
 do.call("grid.arrange", weight_trace_plots)
 dev.off()
 
+png(
+  str_c(path, "/", "w_inputs_to_layers_density", ".png"),
+  width = 20,
+  height = 12,
+  units = "in",
+  res = 100
+)
+do.call("grid.arrange", weight_density_plots)
+dev.off()
+
 # Save Hyperparameter Trace Plots
 
 png(
@@ -670,6 +683,16 @@ png(
   res = 100
 )
 do.call("grid.arrange", hp_trace_plots)
+dev.off()
+
+png(
+  str_c(path, "/", "hp_density", ".png"),
+  width = 20,
+  height = 12,
+  units = "in",
+  res = 100
+)
+do.call("grid.arrange", hp_density_plots)
 dev.off()
 
 # Get Rejection Rate ------------------------------------------------------
@@ -746,42 +769,4 @@ ggsave(
   height = 8
 )
 
-# Traces by plots
 
-# Trace Plots for Weights
-
-df_weights_traces <- list()
-
-for (i in 1:length(desired_weight_vars)) {
-  var <- desired_weight_vars[i]
-  df_weights_traces <- df_weights_traces %>%
-    bind_rows(
-      markov_chain_samples(fit,
-                           var,
-                           burn_in = MCMC_INPUTS$BURN_IN,
-                           iters = MCMC_INPUTS$ITER)
-      )
-}
-
-df_weights_traces <- df_weights_traces %>% 
-  left_join(df_weights_posterior, by = c("var" = "stan_var_name"))
-
-df_plot <- df_weights_traces %>%
-  select(time_index, contains("chain_"), var, layer, stationary) %>%
-  reshape2::melt(id.vars = c("time_index", "layer", "var", "stationary")) %>% 
-  as_tibble() %>% 
-  rename("chain" = "variable") %>% 
-  mutate(chain = as.integer(str_remove(chain, "chain_")))
-
-ggplot(df_plot %>% filter(time_index > 0)) +
-  geom_point(aes(x = time_index, y = value, color = var, alpha = stationary), size = 0.2) + 
-  scale_alpha_manual(values = c(0.20, 1)) +
-  geom_vline(xintercept = 1000,
-             linetype = 2) +
-  viridis::scale_color_viridis(discrete = T) + 
-  theme_bw() +
-  xlab("") +
-  ylab("") +
-  facet_grid(layer~chain, scales = "free") + 
-  theme(text = element_text(size = 16),
-        legend.position = "none")
