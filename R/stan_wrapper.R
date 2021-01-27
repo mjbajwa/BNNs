@@ -375,7 +375,7 @@ mcmc_density_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) 
 
 # Extract summary table from the fit object
 
-stan_summary <- summary(fit)
+stan_summary <- summary(fit, probs = c(0.01, 0.025, 0.10, 0.25, 0.50, 0.75, 0.90, 0.975, 0.99))
 all_parameters <- attr(stan_summary$summary, "dimnames")[[1]]
 df_stan_summary <- stan_summary$summary %>%
   as_tibble() %>%
@@ -533,6 +533,7 @@ for (l in 1:(length(G) + 1)) {
       incoming_neuron %in% previous_hidden_units,
       outgoing_neuron %in% next_hidden_units
     ) %>%
+    filter(!str_detect(stan_var_name, "raw")) %>% 
     pull(stan_var_name)
   
   desired_weight_vars <- c(desired_weight_vars, layer_weights)

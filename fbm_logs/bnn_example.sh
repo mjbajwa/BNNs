@@ -26,7 +26,7 @@ net-mc rlog.net 2000
 # Write output to disk
 
 printf "Writing results to disk \n\n";
-net-pred itndq rlog.net 1000:%10 > results/results.txt;
+net-pred itndqQp rlog.net 1000:%10 > results/results.txt;
 net-tbl tw1@ rlog.net > results/traces_w1.txt;
 net-tbl tw2@ rlog.net > results/traces_w2.txt;
 net-tbl tw3@ rlog.net > results/traces_w3.txt;

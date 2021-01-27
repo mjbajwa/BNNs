@@ -1,4 +1,4 @@
-# Load Libraries
+# Load Libraries ----------------------------------------------------------
 
 library(janitor)
 library(dplyr)
@@ -7,13 +7,13 @@ library(stringr)
 library(viridis)
 library(gridExtra)
 
-# Load FBM Results
+# Load FBM Results ------------------------------------------------------
 
 df_fbm <- data.frame(read.table("./fbm_logs/results/results.txt", header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
   janitor::clean_names() %>% 
   as_tibble()
 
-names(df_fbm) <- c("case", "inputs", "targets", "means", "error_2", "median", "error_median", "x10_qnt", "x90_qnt")
+names(df_fbm) <- c("case", "inputs", "targets", "log_prob", "means", "error_2", "median", "error_median", "x10_qnt", "x90_qnt", "x1_qnt", "x99_qnt")
 
 # Load FBM traces
 # TODO: port to fbm_utils.R
@@ -41,7 +41,7 @@ for(id in groups){
   traces[[id]] <- fbm_load_trace_data(id)
 }
 
-# Plots for FBM specific analysis
+# Generate plots ----------------------------------------------------------
 
 predicted_vs_actual <- ggplot(df_fbm) + 
   geom_point(aes(x = targets, y = means), alpha = 0.5, size = 2, color="red2") + 
@@ -54,8 +54,9 @@ predicted_vs_actual <- ggplot(df_fbm) +
   ggtitle("Predicted vs. Actual (FBM)")
 
 y_vs_x <- ggplot(df_fbm) + #%>% filter(X_V1 > -2.2)) + 
-  geom_ribbon(aes(x = inputs, ymin = x10_qnt, ymax= x90_qnt), fill = "red2", alpha = 0.2) + 
-  geom_point(aes(x = inputs, y = targets), alpha = 0.5, color="black", size = 1.5, alpha = 0.5) + 
+  geom_ribbon(aes(x = inputs, ymin = x1_qnt, ymax= x99_qnt), fill = "red2", alpha = 0.1) + 
+  geom_ribbon(aes(x = inputs, ymin = x10_qnt, ymax= x90_qnt), fill = "red2", alpha = 0.3) + 
+  geom_point(aes(x = inputs, y = targets), alpha = 0.5, color="black", size = 1.5) + 
   geom_line(aes(x = inputs, y = means), color="red2", size = 0.8, alpha = 0.4) + 
   theme_bw() + 
   xlab("X") + 
@@ -63,7 +64,7 @@ y_vs_x <- ggplot(df_fbm) + #%>% filter(X_V1 > -2.2)) +
   theme(text = element_text(size=16)) + 
   ggtitle("Y vs. X (FBM)")
 
-# FBM + Other Stuff -------------------------------------------------------
+# Trace plots -------------------------------------------------------
 
 low_level_group_traces <- list()
 upper_level_group_traces <- list()
@@ -153,15 +154,25 @@ df_stepsizes <- df_stepsizes %>%
     coord %in% 16:24 ~ "3"
   )) %>% 
   group_by(group, iteration) %>% 
-  summarize(stepsize = mean(stepsize))
-
-# ggplot(df_stepsizes) + 
-#   geom_density(aes(x = stepsize, fill = group), alpha = 0.3, color = "black") + 
-#   theme_bw() + 
-#   theme(text = element_text(size = 18))
+  summarize(stepsize = mean(stepsize)) %>% 
+  mutate(factor = 0.4)
 
 df_stepsizes %>% 
   group_by(group) %>% 
   summarize(mean_stepsize = mean(stepsize),
             sdev_stepsize = sd(stepsize)/mean_stepsize*100)
+
+# Return object -----------------------------------------------------------
+
+outputs <- list(
+  "fbm_file" = folder_name,
+  "outputs" = list(
+    "df_predictions" = df_fbm,
+    "traces" = traces,
+    "df_chain_statistics" = df_stepsizes
+  )
+)
+
+write_rds(outputs, str_c(path, "/outputs.rds"))
+
 
