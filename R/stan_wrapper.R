@@ -16,7 +16,7 @@ set.seed(42)
 # Paths -------------------------------------------------------------------
 
 OUTPUT_PATH <- "./output/"
-STAN_FILE <- "./stan/bnns_centered.stan"
+STAN_FILE <- "./stan/bnns_noncentered.stan"
 INPUT_TYPE <- "fbm_example" # power_plant
 SCALE_INPUT <- F
 TRAIN_FRACTION <- 0.5
@@ -63,7 +63,7 @@ FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
 # MCMC control for stan
 
 MCMC_INPUTS <- list(
-  "CHAINS" = 4,
+  "CHAINS" = 1,
   "CORES" = 4,
   "ITER" = 2000,
   "BURN_IN" = 1000,
@@ -274,7 +274,7 @@ parse_stan_vars <- function(vars,
 
 markov_chain_samples <- function(stan_fit,
                                  var,
-                                 n_chains = 4,
+                                 n_chains = MCMC_INPUTS$CHAINS,
                                  burn_in = 1000,
                                  iters = 2000) {
     

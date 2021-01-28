@@ -7,9 +7,17 @@ library(stringr)
 library(viridis)
 library(gridExtra)
 
+PRIOR_ONLY <- F
+
+if(PRIOR_ONLY){
+  INPUT_PATH <- "./fbm_logs/results_priors/"
+} else {
+  INPUT_PATH <- "./fbm_logs/results/"
+}
+
 # Load FBM Results ------------------------------------------------------
 
-df_fbm <- data.frame(read.table("./fbm_logs/results/results.txt", header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
+df_fbm <- data.frame(read.table(str_c(INPUT_PATH, "results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
   janitor::clean_names() %>% 
   as_tibble()
 
@@ -20,7 +28,7 @@ names(df_fbm) <- c("case", "inputs", "targets", "log_prob", "means", "error_2", 
 
 fbm_load_trace_data <- function(id){
 
-  df_trace <- data.frame(read.table(str_c("./fbm_logs/results/traces_", id, ".txt"), header = FALSE)) %>% 
+  df_trace <- data.frame(read.table(str_c(INPUT_PATH, "traces_", id, ".txt"), header = FALSE)) %>% 
     janitor::clean_names() %>% 
     as_tibble()
   
@@ -133,46 +141,60 @@ dev.off()
 
 # Step Sizes --------------------------------------------------------------
 
-df_stepsizes <- list()
+if(!PRIOR_ONLY){
 
-for(iter in seq(1000, 2000, 100)){
-
-  df_stepsizes[[iter]] <- read.table(str_c("./fbm_logs/results/stepsizes_", as.character(iter), ".txt"), 
-                                     header = FALSE, blank.lines.skip = TRUE, skip = 7, nrows = 25) %>% 
-    janitor::clean_names() %>% 
-    as_tibble() %>% 
-    rename(coord = v1, stepsize = v2) %>% 
-    mutate(iteration = iter)
+  df_stepsizes <- list()
+  
+  for(iter in seq(1000, 2000, 100)){
+  
+    df_stepsizes[[iter]] <- read.table(str_c("./fbm_logs/results/stepsizes_", as.character(iter), ".txt"), 
+                                       header = FALSE, blank.lines.skip = TRUE, skip = 7, nrows = 25) %>% 
+      janitor::clean_names() %>% 
+      as_tibble() %>% 
+      rename(coord = v1, stepsize = v2) %>% 
+      mutate(iteration = iter)
+    
+  }
+  
+  df_stepsizes <- df_stepsizes %>% 
+    bind_rows() %>% 
+    mutate(group = case_when(
+      coord %in% 0:7 ~ "1",
+      coord %in% 8:15 ~ "2",
+      coord %in% 16:24 ~ "3"
+    )) %>% 
+    group_by(group, iteration) %>% 
+    summarize(stepsize = mean(stepsize)) %>% 
+    mutate(factor = 0.4)
+  
+  df_stepsizes %>% 
+    group_by(group) %>% 
+    summarize(mean_stepsize = mean(stepsize),
+              sdev_stepsize = sd(stepsize)/mean_stepsize*100)
   
 }
 
-df_stepsizes <- df_stepsizes %>% 
-  bind_rows() %>% 
-  mutate(group = case_when(
-    coord %in% 0:7 ~ "1",
-    coord %in% 8:15 ~ "2",
-    coord %in% 16:24 ~ "3"
-  )) %>% 
-  group_by(group, iteration) %>% 
-  summarize(stepsize = mean(stepsize)) %>% 
-  mutate(factor = 0.4)
-
-df_stepsizes %>% 
-  group_by(group) %>% 
-  summarize(mean_stepsize = mean(stepsize),
-            sdev_stepsize = sd(stepsize)/mean_stepsize*100)
-
 # Return object -----------------------------------------------------------
 
-outputs <- list(
-  "fbm_file" = folder_name,
-  "outputs" = list(
-    "df_predictions" = df_fbm,
-    "traces" = traces,
-    "df_chain_statistics" = df_stepsizes
+if(PRIOR_ONLY == F){
+  outputs <- list(
+    "fbm_file" = folder_name,
+    "outputs" = list(
+      "df_predictions" = df_fbm,
+      "traces" = traces,
+      "df_chain_statistics" = df_stepsizes
+    )
   )
-)
+} else {
+  
+  outputs <- list(
+    "fbm_file" = folder_name,
+    "outputs" = list(
+      "df_predictions" = df_fbm,
+      "traces" = traces    
+    )
+  )
+  
+}
 
 write_rds(outputs, str_c(path, "/outputs.rds"))
-
-

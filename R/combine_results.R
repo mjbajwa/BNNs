@@ -8,9 +8,11 @@ library(ggplot2)
 library(stringr)
 library(janitor)
 library(tidyr)
+library(viridis)
 
 # Configure paths ---------------------------------------------------------
 
+PRIOR_ONLY <- F
 OUTPUT_PATH <- "./output/"
 folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
 path <- str_c(OUTPUT_PATH, "combined_", folder_name)
@@ -27,9 +29,23 @@ save_plot <- function(plot_object, name){
 
 # Load stan and fbm objects -----------------------------------------------
 
-stan_centered_path <- "stan_2021_01_27_17_33_36"
-stan_noncentered_path <- "stan_2021_01_27_17_33_55"
-fbm_path <- "fbm_2021_01_27_18_10_07"
+if(PRIOR_ONLY){
+  
+  # Prior checks
+
+  stan_centered_path <- "stan_2021_01_27_19_52_27" 
+  stan_noncentered_path <- "stan_2021_01_27_19_54_41"
+  fbm_path <- "fbm_2021_01_27_20_04_25"
+  
+} else {
+  
+  # Paths for complete runs - multi-chain etc.
+    
+  stan_centered_path <- "stan_2021_01_27_20_10_37" 
+  stan_noncentered_path <- "stan_2021_01_27_20_13_51" 
+  fbm_path <- "fbm_2021_01_27_20_33_55" 
+    
+}
 
 capture.output(list("centered" = stan_centered_path, 
                     "non-centered" = stan_noncentered_path,
@@ -85,7 +101,7 @@ y_vs_x_plot <- ggplot(df_preds) +
   geom_ribbon(aes(x = inputs, ymin = q1, ymax = q99, fill = method), alpha = 0.1) + 
   geom_ribbon(aes(x = inputs, ymin = q10, ymax = q90, fill = method), alpha = 0.2) +
   geom_point(aes(x = inputs, y = targets), alpha = 0.5, color = "black", size = 2.5) +
-  geom_line(aes(x = inputs, y = mean, color = method), size = 0.8, alpha = 0.4) +
+  geom_line(aes(x = inputs, y = median, color = method), size = 0.8, alpha = 0.4) +
   geom_rug(data = df_train_inputs, aes(x = inputs, y = mean), sides="b") + 
   theme_bw() +
   xlab("X") +
@@ -99,7 +115,7 @@ y_vs_x_plot <- ggplot(df_preds) +
 
 y_vs_x_means <- ggplot() + 
   geom_point(data = df_preds, aes(x = inputs, y = targets), alpha = 0.5, color = "black", size = 2.5) +
-  geom_line(data = df_preds, aes(x = inputs, y = mean, color = method, linetype = method), size = 0.8, alpha = 0.8) +
+  geom_line(data = df_preds, aes(x = inputs, y = median, color = method, linetype = method), size = 0.8, alpha = 0.8) +
   geom_rug(data = df_train_inputs, aes(x = inputs, y = mean), sides="b") + 
   theme_bw() +
   xlab("X") +
@@ -118,7 +134,7 @@ y_vs_x_means %>% save_plot("y_vs_x_predictive_mean_only")
 
 markov_chain_samples <- function(stan_fit,
                                  var,
-                                 n_chains = 4,
+                                 n_chains = 1,
                                  burn_in = 1000,
                                  iters = 2000) {
   
@@ -147,7 +163,7 @@ markov_chain_samples <- function(stan_fit,
   
 }
 
-join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_chain = 2, list_name = "desired_weight_vars"){
+join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_chain = 1, list_name = "desired_weight_vars"){
   
   # Extract FBM traces
   
@@ -241,14 +257,14 @@ plot_traces <- function(df, title, subtext, size=0.2){
 # h2 -> B_prec[2]
 # h3 -> W_prec[2]
 
-w1_traces <- join_fbm_stan_traces(fbm_var = "w1", stan_var_pattern = "W\\[1", chosen_chain = 2, list_name = "desired_weight_vars")
-b1_traces <- join_fbm_stan_traces(fbm_var = "w2", stan_var_pattern = "B\\[1", chosen_chain = 2, list_name = "desired_bias_vars")
-w2_traces <- join_fbm_stan_traces(fbm_var = "w3", stan_var_pattern = "W\\[2", chosen_chain = 2, list_name = "desired_weight_vars")
-b2_traces <- join_fbm_stan_traces(fbm_var = "w4", stan_var_pattern = "B\\[2", chosen_chain = 2, list_name = "desired_bias_vars")
-hw1_traces <- join_fbm_stan_traces(fbm_var = "h1", stan_var_pattern = "W_prec\\[1", chosen_chain = 2, list_name = "weights_desired_hp_vars")
-hb1_traces <- join_fbm_stan_traces(fbm_var = "h2", stan_var_pattern = "B_prec\\[1", chosen_chain = 2, list_name = "biases_desired_hp_vars")
-hw2_traces <- join_fbm_stan_traces(fbm_var = "h3", stan_var_pattern = "W_prec\\[2", chosen_chain = 2, list_name = "weights_desired_hp_vars")
-y_prec_traces <- join_fbm_stan_traces(fbm_var = "y_sdev", stan_var_pattern = "y_prec", chosen_chain = 2, list_name = "target_noise_hp_vars")
+w1_traces <- join_fbm_stan_traces(fbm_var = "w1", stan_var_pattern = "W\\[1", chosen_chain = 1, list_name = "desired_weight_vars")
+b1_traces <- join_fbm_stan_traces(fbm_var = "w2", stan_var_pattern = "B\\[1", chosen_chain = 1, list_name = "desired_bias_vars")
+w2_traces <- join_fbm_stan_traces(fbm_var = "w3", stan_var_pattern = "W\\[2", chosen_chain = 1, list_name = "desired_weight_vars")
+b2_traces <- join_fbm_stan_traces(fbm_var = "w4", stan_var_pattern = "B\\[2", chosen_chain = 1, list_name = "desired_bias_vars")
+hw1_traces <- join_fbm_stan_traces(fbm_var = "h1", stan_var_pattern = "W_prec\\[1", chosen_chain = 1, list_name = "weights_desired_hp_vars")
+hb1_traces <- join_fbm_stan_traces(fbm_var = "h2", stan_var_pattern = "B_prec\\[1", chosen_chain = 1, list_name = "biases_desired_hp_vars")
+hw2_traces <- join_fbm_stan_traces(fbm_var = "h3", stan_var_pattern = "W_prec\\[2", chosen_chain = 1, list_name = "weights_desired_hp_vars")
+y_prec_traces <- join_fbm_stan_traces(fbm_var = "y_sdev", stan_var_pattern = "y_prec", chosen_chain = 1, list_name = "target_noise_hp_vars")
 
 SUBTEXT <- "Vertical line indicates starting point of values used as samples. Only one Stan chain is used for consistent comparison."
 
@@ -257,13 +273,13 @@ b1_trace_plot <- plot_traces(b1_traces, title = "Hidden Unit Biases", subtext = 
 w2_trace_plot <- plot_traces(w2_traces, title = "Hidden-to-Output Unit Weights", subtext = SUBTEXT)
 b2_trace_plot <- plot_traces(b2_traces, title = "Output Unit Biases", subtext = SUBTEXT)
 
-hw1_trace_plot <- plot_traces(hw1_traces, 
+hw1_trace_plot <- plot_traces(hw1_traces %>% mutate(value = ifelse(method == "Gibbs", 1/value^2, value)), 
             title = "Input-to-Hidden Weights: Precision Hyperparameter", subtext = SUBTEXT)
 
-hb1_trace_plot <- plot_traces(hb1_traces, 
+hb1_trace_plot <- plot_traces(hb1_traces %>% mutate(value = ifelse(method == "Gibbs", 1/value^2, value)), 
             title = "Hidden Unit Biases: Precision Hyperparameter", subtext = SUBTEXT)
 
-hw2_trace_plot <- plot_traces(hw2_traces, 
+hw2_trace_plot <- plot_traces(hw2_traces %>% mutate(value = ifelse(method == "Gibbs", 1/value^2, value)), 
             title = "Hidden-to-Output Weights: Precision Hyperparameter", subtext = SUBTEXT)
 
 y_prec_trace_plot <- plot_traces(y_prec_traces %>% mutate(value = ifelse(method == "Gibbs", 1/value^2, value)), 
@@ -275,7 +291,7 @@ y_prec_trace_plot <- plot_traces(y_prec_traces %>% mutate(value = ifelse(method 
 
 w1_trace_plot %>% save_plot("input_to_hidden_weights")
 b1_trace_plot %>% save_plot("hidden_unit_biases")
-w2_trace_plot %>% save_plot("output_to_hidden_weights")
+w2_trace_plot %>% save_plot("hidden_to_output_weights")
 b2_trace_plot %>% save_plot("output_unit_bias")
 hw1_trace_plot %>% save_plot("input_to_hidden_precision")
 hb1_trace_plot %>% save_plot("hidden_bias_precision")
@@ -284,40 +300,44 @@ y_prec_trace_plot %>% save_plot("target_noise_precision")
 
 # Step size comparison  ---------------------------------------------------
 
-fbm_stepsizes <- fbm$outputs$df_chain_statistics %>% 
-  ungroup() %>% 
-  mutate(stepsize = stepsize*factor) %>% 
-  rename(t = iteration) %>% 
-  select(-factor) %>% 
-  mutate(method = "Gibbs", chain = "1")
+if(PRIOR_ONLY == F){
 
-stan_stepsizes_c <- stan_centered$outputs$df_chain_statistics %>% 
-  select(iter, stepsize__, chain) %>% 
-  rename(t = iter,
-         stepsize = stepsize__) %>% 
-  mutate(method = "HMC: centered", group = NA)
+  fbm_stepsizes <- fbm$outputs$df_chain_statistics %>% 
+    ungroup() %>% 
+    mutate(stepsize = stepsize*factor) %>% 
+    rename(t = iteration) %>% 
+    select(-factor) %>% 
+    mutate(method = "Gibbs", chain = "1")
+  
+  stan_stepsizes_c <- stan_centered$outputs$df_chain_statistics %>% 
+    select(iter, stepsize__, chain) %>% 
+    rename(t = iter,
+           stepsize = stepsize__) %>% 
+    mutate(method = "HMC: centered", group = NA)
+  
+  stan_stepsizes_nc <- stan_noncentered$outputs$df_chain_statistics %>% 
+    select(iter, stepsize__, chain) %>% 
+    rename(t = iter,
+           stepsize = stepsize__) %>% 
+    mutate(method = "HMC: non-centered", group = NA)
+  
+  df_stepsizes <- fbm_stepsizes %>% 
+    bind_rows(stan_stepsizes_c) %>% 
+    bind_rows(stan_stepsizes_nc)
+  
+  stepsizes_plot <- ggplot(df_stepsizes %>% filter(t > 1000)) +
+    geom_point(aes(x = t, y = stepsize, color = method), size = 0.5) + 
+    theme_bw() + 
+    facet_wrap(method~.) + 
+    scale_color_viridis(discrete=T) + 
+    xlab("") + 
+    theme(text=element_text(size=20),
+          legend.position = "none",
+          plot.subtitle = element_text(size = 12)) + 
+    facet_wrap(method ~ .) + 
+    ggtitle("Stepsize comparison", 
+            subtitle = "For HMC, all four chain's stepsizes are shown. For Gibbs, the different parameter group's step-sizes are shown.")
+  
+  stepsizes_plot %>% save_plot("step_size_comparison")
 
-stan_stepsizes_nc <- stan_noncentered$outputs$df_chain_statistics %>% 
-  select(iter, stepsize__, chain) %>% 
-  rename(t = iter,
-         stepsize = stepsize__) %>% 
-  mutate(method = "HMC: non-centered", group = NA)
-
-df_stepsizes <- fbm_stepsizes %>% 
-  bind_rows(stan_stepsizes_c) %>% 
-  bind_rows(stan_stepsizes_nc)
-
-stepsizes_plot <- ggplot(df_stepsizes %>% filter(t > 1000)) +
-  geom_point(aes(x = t, y = stepsize, color = method), size = 0.5) + 
-  theme_bw() + 
-  facet_wrap(method~.) + 
-  scale_color_viridis(discrete=T) + 
-  xlab("") + 
-  theme(text=element_text(size=20),
-        legend.position = "none",
-        plot.subtitle = element_text(size = 12)) + 
-  facet_wrap(method ~ .) + 
-  ggtitle("Stepsize comparison", 
-          subtitle = "For HMC, all four chain's stepsizes are shown. For Gibbs, the different parameter group's step-sizes are shown.")
-
-stepsizes_plot %>% save_plot("step_size_comparison")
+}
