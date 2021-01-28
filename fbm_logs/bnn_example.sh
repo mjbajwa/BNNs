@@ -34,6 +34,7 @@ net-tbl tw4@ rlog.net > results/traces_w4.txt;
 net-tbl th1 rlog.net > results/traces_h1.txt;
 net-tbl th2 rlog.net > results/traces_h2.txt;
 net-tbl th3 rlog.net > results/traces_h3.txt;
+net-tbl tn@ rlog.net > results/traces_y_sdev.txt
 
 printf "Writing step sizes to disk" 
 net-stepsizes rlog.net 1000 > results/stepsizes_1000.txt

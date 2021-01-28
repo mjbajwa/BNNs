@@ -1,3 +1,6 @@
+# Wrapper for stan
+# 1. Change line 19 to use centered / non-centered.
+
 # Load Libraries ----------------------------------------------------------
 
 library(rstan)
@@ -13,7 +16,7 @@ set.seed(42)
 # Paths -------------------------------------------------------------------
 
 OUTPUT_PATH <- "./output/"
-STAN_FILE <- "./stan/bnns_noncentered.stan"
+STAN_FILE <- "./stan/bnns_centered.stan"
 INPUT_TYPE <- "fbm_example" # power_plant
 SCALE_INPUT <- F
 TRAIN_FRACTION <- 0.5
@@ -897,7 +900,7 @@ outputs <- list(
     "stan_fit" = fit,
     "df_predictions" = df_post_preds,
     "desired_weight_vars" = desired_weight_vars,
-    "desired_weight_vars" = desired_bias_vars,
+    "desired_bias_vars" = desired_bias_vars,
     "weights_desired_hp_vars" = weights_desired_hp_vars,
     "biases_desired_hp_vars" = biases_desired_hp_vars,
     "target_noise_hp_vars" = target_noise_hp_vars,
@@ -906,3 +909,4 @@ outputs <- list(
 )
 
 write_rds(outputs, str_c(path, "/outputs.rds"))
+print(str_c("Stan Results", path))

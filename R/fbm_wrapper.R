@@ -34,7 +34,7 @@ fbm_load_trace_data <- function(id){
   
 }
 
-groups <- c("w1", "w2", "w3", "w4", "h1", "h2", "h3")
+groups <- c("w1", "w2", "w3", "w4", "h1", "h2", "h3", "y_sdev")
 traces <- list()
 
 for(id in groups){
