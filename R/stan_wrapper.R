@@ -63,7 +63,7 @@ FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
 # MCMC control for stan
 
 MCMC_INPUTS <- list(
-  "CHAINS" = 1,
+  "CHAINS" = 4,
   "CORES" = 4,
   "ITER" = 2000,
   "BURN_IN" = 1000,
@@ -910,3 +910,4 @@ outputs <- list(
 
 write_rds(outputs, str_c(path, "/outputs.rds"))
 print(str_c("Stan Results", path))
+  

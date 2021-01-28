@@ -41,9 +41,9 @@ if(PRIOR_ONLY){
   
   # Paths for complete runs - multi-chain etc.
     
-  stan_centered_path <- "stan_2021_01_27_20_10_37" 
-  stan_noncentered_path <- "stan_2021_01_27_20_13_51" 
-  fbm_path <- "fbm_2021_01_27_20_33_55" 
+  stan_centered_path <- "stan_2021_01_28_18_14_54" # stan_2021_01_27_20_10_37
+  stan_noncentered_path <- "stan_2021_01_28_18_19_02" # stan_2021_01_27_20_13_51
+  fbm_path <- "fbm_2021_01_28_18_12_40"  # fbm_2021_01_27_20_33_55
     
 }
 
@@ -134,7 +134,7 @@ y_vs_x_means %>% save_plot("y_vs_x_predictive_mean_only")
 
 markov_chain_samples <- function(stan_fit,
                                  var,
-                                 n_chains = 1,
+                                 n_chains = 4,
                                  burn_in = 1000,
                                  iters = 2000) {
   
@@ -172,6 +172,8 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
     fbm_traces <- fbm$outputs$traces[[fbm_var]] %>% 
       mutate(method = "Gibbs") %>% 
       select(t, method, everything()) %>% 
+      # filter(chain == chosen_chain) %>% 
+      select(-chain) %>% 
       tidyr::pivot_longer(!c(t, method), names_to = "var")
   
   }
@@ -210,7 +212,7 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
   
   stan_traces <- stan_traces_c %>% 
     bind_rows(stan_traces_nc) %>% 
-    filter(chain == chosen_chain) %>% 
+    # filter(chain == chosen_chain) %>% 
     select(-chain) %>% 
     select(t, method, everything()) %>% 
     tidyr::pivot_longer(!c(t, method), names_to = "var")
@@ -307,7 +309,8 @@ if(PRIOR_ONLY == F){
     mutate(stepsize = stepsize*factor) %>% 
     rename(t = iteration) %>% 
     select(-factor) %>% 
-    mutate(method = "Gibbs", chain = "1")
+    mutate(method = "Gibbs",
+           chain = as.character(chain))
   
   stan_stepsizes_c <- stan_centered$outputs$df_chain_statistics %>% 
     select(iter, stepsize__, chain) %>% 
@@ -341,3 +344,5 @@ if(PRIOR_ONLY == F){
   stepsizes_plot %>% save_plot("step_size_comparison")
 
 }
+
+print(path)

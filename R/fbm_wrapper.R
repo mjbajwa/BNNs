@@ -8,37 +8,93 @@ library(viridis)
 library(gridExtra)
 
 PRIOR_ONLY <- F
+CHAINS <- c("1", "2", "3", "4")
 
 if(PRIOR_ONLY){
-  INPUT_PATH <- "./fbm_logs/results_priors/"
+  INPUT_PATH <- str_c("./fbm_logs/results_priors/")
 } else {
-  INPUT_PATH <- "./fbm_logs/results/"
+  INPUT_PATH <- str_c("./fbm_logs/chain_", chain, "/results/")
+}
+
+load_and_compute_predictions <- function(CHAINS){
+  
+  df_fbm_raw <- tibble()
+  
+  for(chain in CHAINS){
+    
+    INPUT_PATH <- str_c("./fbm_logs/chain_", chain, "/results/")
+    
+    df_fbm_load <- data.frame(read.table(str_c(INPUT_PATH, "test_target_samples.txt"), header = FALSE, blank.lines.skip = TRUE, nrows = 100)) %>% 
+      janitor::clean_names() %>% 
+      as_tibble() %>% 
+      select(-v1, -v2)
+    
+    df_fbm_raw <- df_fbm_raw %>% 
+      bind_rows(df_fbm_load)
+    
+  }
+  
+  df_chains_agg <- df_fbm_raw %>% 
+    pivot_longer(cols = everything()) %>% 
+    group_by(name) %>% 
+    summarise(means = mean(value),
+              median = median(value),
+              x10_qnt = quantile(value, 0.10), 
+              x90_qnt = quantile(value, 0.90), 
+              x1_qnt = quantile(value, 0.01),
+              x99_qnt = quantile(value, 0.99)) %>% 
+    ungroup() %>% 
+    mutate(name = as.numeric(str_replace(name, "v", ""))) %>% 
+    arrange(name) %>% 
+    mutate(case = 1:n()) %>% 
+    select(-name) %>% 
+    select(case, everything())
+  
+  df_chains_agg
+  
 }
 
 # Load FBM Results ------------------------------------------------------
 
-df_fbm <- data.frame(read.table(str_c(INPUT_PATH, "results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
+df_fbm <- data.frame(read.table(str_c("./fbm_logs/chain_", "1", "/results/results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
   janitor::clean_names() %>% 
   as_tibble()
 
 names(df_fbm) <- c("case", "inputs", "targets", "log_prob", "means", "error_2", "median", "error_median", "x10_qnt", "x90_qnt", "x1_qnt", "x99_qnt")
 
+df_fbm_all_chains <- load_and_compute_predictions(CHAINS)
+
+df_fbm <- df_fbm %>% 
+  select(-means, -median, -contains("qnt")) %>% 
+  left_join(df_fbm_all_chains, by = "case")
+
 # Load FBM traces
 # TODO: port to fbm_utils.R
 
-fbm_load_trace_data <- function(id){
+fbm_load_trace_data <- function(id, CHAINS){
+  
+  df_all_traces <- tibble()
+  
+  for(chain in CHAINS){
+    
+    INPUT_PATH <- str_c("./fbm_logs/chain_", chain, "/results/")
 
-  df_trace <- data.frame(read.table(str_c(INPUT_PATH, "traces_", id, ".txt"), header = FALSE)) %>% 
-    janitor::clean_names() %>% 
-    as_tibble()
+    df_trace <- data.frame(read.table(str_c(INPUT_PATH, "traces_", id, ".txt"), header = FALSE)) %>% 
+      janitor::clean_names() %>% 
+      as_tibble()
+    
+    # Clean up naming convention
+    
+    new_names <- paste(id, str_replace(names(df_trace), "v", ""), sep = "_")
+    new_names <- c("t", new_names[-length(new_names)])
+    names(df_trace) <- new_names
+    df_trace["chain"] <- as.numeric(chain)
+    
+    df_all_traces <- df_all_traces %>% bind_rows(df_trace)
   
-  # Clean up naming convention
+  }
   
-  new_names <- paste(id, str_replace(names(df_trace), "v", ""), sep = "_")
-  new_names <- c("t", new_names[-length(new_names)])
-  names(df_trace) <- new_names
-  
-  return(df_trace)
+  return(df_all_traces)
   
 }
 
@@ -46,7 +102,7 @@ groups <- c("w1", "w2", "w3", "w4", "h1", "h2", "h3", "y_sdev")
 traces <- list()
 
 for(id in groups){
-  traces[[id]] <- fbm_load_trace_data(id)
+  traces[[id]] <- fbm_load_trace_data(id, CHAINS)
 }
 
 # Generate plots ----------------------------------------------------------
@@ -78,12 +134,12 @@ low_level_group_traces <- list()
 upper_level_group_traces <- list()
 
 lower_group_id <- groups[str_detect(groups, "w")]
-upper_group_id <- groups[str_detect(groups, "h")]
+upper_group_id <- groups[str_detect(groups, "h|y_sdev")]
 
 for(id in lower_group_id){
 
   df_plot <- traces[[id]] %>% 
-    tidyr::pivot_longer(!t, names_to = "vars")
+    tidyr::pivot_longer(!c("t", "chain"), names_to = "vars")
   
   low_level_group_traces[[id]] <- ggplot(df_plot) +
     geom_point(aes(x = t, y = value, color = vars, alpha=t), size=0.2) + 
@@ -93,14 +149,15 @@ for(id in lower_group_id){
     xlab("") + 
     ylab("") + 
     theme(text=element_text(size=16),
-          legend.position = "none")
+          legend.position = "none") + 
+    facet_wrap(chain~.)
   
 }
 
 for(id in upper_group_id){
   
   df_plot <- traces[[id]] %>% 
-    tidyr::pivot_longer(!t, names_to = "vars")
+    tidyr::pivot_longer(!c("t", "chain"), names_to = "vars")
   
   upper_level_group_traces[[id]] <- ggplot(df_plot) +
     geom_point(aes(x = t, y = value, color = vars, alpha=t), size=1,) + 
@@ -110,7 +167,8 @@ for(id in upper_group_id){
     ylab("") + 
     theme(text=element_text(size=16),
           legend.position = "none") + 
-    coord_trans(y="log10")
+    coord_trans(y="log10") + 
+    facet_wrap(chain~.)
   
 }
 
@@ -142,36 +200,41 @@ dev.off()
 # Step Sizes --------------------------------------------------------------
 
 if(!PRIOR_ONLY){
-
-  df_stepsizes <- list()
   
-  for(iter in seq(1000, 2000, 100)){
+  df_stepsizes_all <- tibble()
   
-    df_stepsizes[[iter]] <- read.table(str_c("./fbm_logs/results/stepsizes_", as.character(iter), ".txt"), 
-                                       header = FALSE, blank.lines.skip = TRUE, skip = 7, nrows = 25) %>% 
-      janitor::clean_names() %>% 
-      as_tibble() %>% 
-      rename(coord = v1, stepsize = v2) %>% 
-      mutate(iteration = iter)
+  for(chain in CHAINS){
+  
+    df_stepsizes <- list()
+    
+    for(iter in seq(1000, 2000, 100)){
+    
+      df_stepsizes[[iter]] <- read.table(str_c("./fbm_logs/chain_", chain, "/results/stepsizes_", as.character(iter), ".txt"), 
+                                         header = FALSE, blank.lines.skip = TRUE, skip = 7, nrows = 25) %>% 
+        janitor::clean_names() %>% 
+        as_tibble() %>% 
+        rename(coord = v1, stepsize = v2) %>% 
+        mutate(iteration = iter)
+      
+    }
+    
+    df_stepsizes <- df_stepsizes %>% 
+      bind_rows() %>% 
+      mutate(group = case_when(
+        coord %in% 0:7 ~ "1",
+        coord %in% 8:15 ~ "2",
+        coord %in% 16:24 ~ "3"
+      )) %>% 
+      group_by(group, iteration) %>% 
+      summarize(stepsize = mean(stepsize)) %>% 
+      mutate(factor = 0.4, 
+             chain = as.numeric(chain))
+    
+    df_stepsizes_all <- df_stepsizes_all %>% 
+      bind_rows(df_stepsizes)
     
   }
-  
-  df_stepsizes <- df_stepsizes %>% 
-    bind_rows() %>% 
-    mutate(group = case_when(
-      coord %in% 0:7 ~ "1",
-      coord %in% 8:15 ~ "2",
-      coord %in% 16:24 ~ "3"
-    )) %>% 
-    group_by(group, iteration) %>% 
-    summarize(stepsize = mean(stepsize)) %>% 
-    mutate(factor = 0.4)
-  
-  df_stepsizes %>% 
-    group_by(group) %>% 
-    summarize(mean_stepsize = mean(stepsize),
-              sdev_stepsize = sd(stepsize)/mean_stepsize*100)
-  
+    
 }
 
 # Return object -----------------------------------------------------------
@@ -182,7 +245,7 @@ if(PRIOR_ONLY == F){
     "outputs" = list(
       "df_predictions" = df_fbm,
       "traces" = traces,
-      "df_chain_statistics" = df_stepsizes
+      "df_chain_statistics" = df_stepsizes_all
     )
   )
 } else {
