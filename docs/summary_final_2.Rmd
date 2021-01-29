@@ -1,0 +1,156 @@
+---
+title: "BNNs Hyperparameter Sampling: Comparing Gibbs vs. HMC (NUTS)"
+# author: "Jamal Bajwa"
+date: "01/28/2021"
+output: 
+  beamer_presentation:    
+    theme: "boxes"
+    slide_level: 2
+    toc: true
+  fontsize: 12 pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.align="center")
+```
+
+# Overview
+
+## Overview
+
+Three sampling techniques for parameters/hyperparameters:
+
+- HMC (Centered Parametrization, NUTS for adaptation)
+- HMC (Non-Centered Parametrization, NUTS for adaptation)
+- FBM (Gibbs sampling for hyperparameters, HMC for all others)
+
+## Centered vs. Non-Centered Parametrization
+
+- Centered: $$f(W | \mu, \tau) = Normal(\mu, \tau^{-0.5})$$
+- Non-Centered: $$W = \mu + \tau^{-0.5}W_{norm}, f(W_{norm}) = Normal(0, 1)$$
+- Applies to all low-level weights and biases
+
+## Global Assumptions
+
+Architecture:
+
+- 1 hidden layer, 8 hidden units
+- tanh activation 
+- _parameter groups_: input-hidden weights, hidden-output weights, hidden biases, output bias
+- variance of hidden-output weights scaled by number of units in hidden layer, to approach Gaussian Processes as number of units grows
+
+Data:
+
+- from FBM example 
+- input dimensions = 1, output dimensions = 1
+
+Hyperparameter Priors (FBM Notation):
+
+- input-hidden weights hyperparameter: 0.05:0.5
+- hidden-output weights hyperparameter: 0.05:0.5 
+- hidden layer biases hyperparameter: 0.05:0.5
+- output bias hyperparameter: 100
+- target noise: 0.05:0.5
+
+## Assumptions 
+
+Tuning Parameters for NUTS: 
+
+- `adapt_delta`: 0.8 (default = 0.8)
+- `max_treedepth`: 10 (default = 10)
+- `adapt_gamma`: 0.05 (default = 0.05)
+
+Initial Values:
+
+- `Weight Precision`: 1
+- `Biases Precision`: 1
+- `Target Noise Precision`: 1
+- `Weights`: 0
+- `Biases`: 0
+
+__4 separate chains__ were used with the same initializations but different random seeds. 
+
+# Results
+
+## Predictive Uncertainty
+
+![Predictive Quality](../output/combined_2021_01_29_15_18_22/y_vs_x.png){width=250px, height=250px}
+
+## Prediction Median
+
+![Predictive Median](../output/combined_2021_01_29_15_18_22/y_vs_x_predictive_mean_only.png){width=250px, height=250px}
+
+## Hyperparameters: Measurement Noise - Standard Deviation
+
+![Target Noise Standard Deviation](../output/combined_2021_01_29_15_18_22/target_noise_precision.png){width=250px, height=250px}
+
+## Hyperparameters: Inputs-to-Hidden Weights - Standard Deviation
+
+![Inputs-to-Hidden Weights - Standard Deviation](../output/combined_2021_01_29_15_18_22/input_to_hidden_precision.png){width=250px, height=250px}
+
+## Hyperparameters: Hidden-to-Output Weights - Standard Deviation
+
+![Hidden-to-Output Weights - Standard Deviation](../output/combined_2021_01_29_15_18_22/hidden_to_output_precision.png){width=250px, height=250px}
+
+## Hyperparameters: Hidden Unit Biases - Standard Deviation
+
+![Hidden Unit Biases - Standard Deviation](../output/combined_2021_01_29_15_18_22/hidden_bias_precision.png){width=250px, height=250px}
+
+## Parameters: Inputs-to-Hidden Weights
+
+![Inputs-to-Hidden Weights](../output/combined_2021_01_29_15_18_22/input_to_hidden_weights.png){width=250px, height=250px}
+
+## Parameters: Hidden-to-Output Weights
+
+![Hidden-to-Output Weights](../output/combined_2021_01_29_15_18_22/hidden_to_output_weights.png){width=250px, height=250px}
+
+## Parameters: Hidden Units Biases
+
+![Hidden Units Biases](../output/combined_2021_01_29_15_18_22/hidden_unit_biases.png){width=250px, height=250px}
+
+## Parameters: Output Unit Bias
+
+![Output Unit Bias](../output/combined_2021_01_29_15_18_22/output_unit_bias.png){width=250px, height=250px}
+
+## Stepsize Comparison
+
+![Step Size Comparison](../output/combined_2021_01_29_15_18_22/step_size_comparison.png){width=250px, height=250px}
+
+# Prior Checks / Conformance
+
+## Predictive Uncertainty
+
+![Predictive Quality](../output/combined_2021_01_29_15_55_36/y_vs_x.png){width=250px, height=250px}
+
+
+## Hyperparameters: Measurement Noise - Standard Deviation
+
+![Target Noise Standard Deviation](../output/combined_2021_01_29_15_55_36/target_noise_precision.png){width=250px, height=250px}
+
+## Hyperparameters: Inputs-to-Hidden Weights - Standard Deviation
+
+![Inputs-to-Hidden Weights - Standard Deviation](../output/combined_2021_01_29_15_55_36/input_to_hidden_precision.png){width=250px, height=250px}
+
+## Hyperparameters: Hidden-to-Output Weights - Standard Deviation
+
+![Hidden-to-Output Weights - Standard Deviation](../output/combined_2021_01_29_15_55_36/hidden_to_output_precision.png){width=250px, height=250px}
+
+## Hyperparameters: Hidden Unit Biases - Standard Deviation
+
+![Hidden Unit Biases - Standard Deviation](../output/combined_2021_01_29_15_55_36/hidden_bias_precision.png){width=250px, height=250px}
+
+## Parameters: Inputs-to-Hidden Weights
+
+![Inputs-to-Hidden Weights](../output/combined_2021_01_29_15_55_36/input_to_hidden_weights.png){width=250px, height=250px}
+
+## Parameters: Hidden-to-Output Weights
+
+![Hidden-to-Output Weights](../output/combined_2021_01_29_15_55_36/hidden_to_output_weights.png){width=250px, height=250px}
+
+## Parameters: Hidden Units Biases
+
+![Hidden Units Biases](../output/combined_2021_01_29_15_55_36/hidden_unit_biases.png){width=250px, height=250px}
+
+## Parameters: Output Unit Bias
+
+![Output Unit Bias](../output/combined_2021_01_29_15_55_36/output_unit_bias.png){width=250px, height=250px}
