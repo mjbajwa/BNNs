@@ -12,8 +12,6 @@ CHAINS <- c("1", "2", "3", "4")
 
 if(PRIOR_ONLY){
   INPUT_PATH <- str_c("./fbm_logs/results_priors/")
-} else {
-  INPUT_PATH <- str_c("./fbm_logs/chain_", chain, "/results/")
 }
 
 load_and_compute_predictions <- function(CHAINS){
@@ -56,17 +54,29 @@ load_and_compute_predictions <- function(CHAINS){
 
 # Load FBM Results ------------------------------------------------------
 
-df_fbm <- data.frame(read.table(str_c("./fbm_logs/chain_", "1", "/results/results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
+# Method 1: Aggregations in R
+
+# df_fbm <- data.frame(read.table(str_c("./fbm_logs/chain_", "1", "/results/results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
+#   janitor::clean_names() %>% 
+#   as_tibble()
+# 
+# names(df_fbm) <- c("case", "inputs", "targets", "log_prob", "means", "error_2", "median", "error_median", "x10_qnt", "x90_qnt", "x1_qnt", "x99_qnt")
+# 
+# df_fbm_all_chains <- load_and_compute_predictions(CHAINS)
+# 
+# df_fbm <- df_fbm %>% 
+#   select(-means, -median, -contains("qnt")) %>% 
+#   left_join(df_fbm_all_chains, by = "case")
+
+# Method 2: Aggregations directly in FBM
+
+# output of net-pred itndqQp rlog_1.net 1000:%40 rlog_2.net 1000:%40 rlog_3.net 1000:%40 rlog_4.net 1000:%40 > results/comb
+
+df_fbm <- data.frame(read.table(str_c("./fbm_logs/results/combined_results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
   janitor::clean_names() %>% 
   as_tibble()
 
 names(df_fbm) <- c("case", "inputs", "targets", "log_prob", "means", "error_2", "median", "error_median", "x10_qnt", "x90_qnt", "x1_qnt", "x99_qnt")
-
-df_fbm_all_chains <- load_and_compute_predictions(CHAINS)
-
-df_fbm <- df_fbm %>% 
-  select(-means, -median, -contains("qnt")) %>% 
-  left_join(df_fbm_all_chains, by = "case")
 
 # Load FBM traces
 # TODO: port to fbm_utils.R

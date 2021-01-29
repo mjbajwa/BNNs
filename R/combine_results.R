@@ -12,7 +12,7 @@ library(viridis)
 
 # Configure paths ---------------------------------------------------------
 
-PRIOR_ONLY <- F
+PRIOR_ONLY <- T
 OUTPUT_PATH <- "./output/"
 folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
 path <- str_c(OUTPUT_PATH, "combined_", folder_name)
@@ -43,7 +43,7 @@ if(PRIOR_ONLY){
     
   stan_centered_path <- "stan_2021_01_28_18_14_54" # stan_2021_01_27_20_10_37
   stan_noncentered_path <- "stan_2021_01_28_18_19_02" # stan_2021_01_27_20_13_51
-  fbm_path <- "fbm_2021_01_28_18_12_40"  # fbm_2021_01_27_20_33_55
+  fbm_path <- "fbm_2021_01_29_09_39_56"  # fbm_2021_01_27_20_33_55
     
 }
 
@@ -98,10 +98,10 @@ df_train_inputs <- stan_centered$outputs$df_predictions %>%
   rename(inputs = X_V1)
 
 y_vs_x_plot <- ggplot(df_preds) + 
-  geom_ribbon(aes(x = inputs, ymin = q1, ymax = q99, fill = method), alpha = 0.1) + 
-  geom_ribbon(aes(x = inputs, ymin = q10, ymax = q90, fill = method), alpha = 0.2) +
-  geom_point(aes(x = inputs, y = targets), alpha = 0.5, color = "black", size = 2.5) +
-  geom_line(aes(x = inputs, y = median, color = method), size = 0.8, alpha = 0.4) +
+  geom_ribbon(aes(x = inputs, ymin = q1, ymax = q99), fill = "gray2", alpha = 0.1) + 
+  geom_ribbon(aes(x = inputs, ymin = q10, ymax = q90), fill = "gray2", alpha = 0.2) +
+  geom_point(aes(x = inputs, y = targets), alpha = 0.9, color = "black", size = 2) +
+  geom_line(aes(x = inputs, y = median), color = "gray4", size = 0.8, alpha = 0.6) +
   geom_rug(data = df_train_inputs, aes(x = inputs, y = mean), sides="b") + 
   theme_bw() +
   xlab("X") +
@@ -114,7 +114,7 @@ y_vs_x_plot <- ggplot(df_preds) +
   facet_wrap(method ~ .)
 
 y_vs_x_means <- ggplot() + 
-  geom_point(data = df_preds, aes(x = inputs, y = targets), alpha = 0.5, color = "black", size = 2.5) +
+  geom_point(data = df_preds, aes(x = inputs, y = targets), alpha = 0.9, color = "black", size = 2.5) +
   geom_line(data = df_preds, aes(x = inputs, y = median, color = method, linetype = method), size = 0.8, alpha = 0.8) +
   geom_rug(data = df_train_inputs, aes(x = inputs, y = mean), sides="b") + 
   theme_bw() +
@@ -173,7 +173,7 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
       mutate(method = "Gibbs") %>% 
       select(t, method, everything()) %>% 
       # filter(chain == chosen_chain) %>% 
-      select(-chain) %>% 
+      # select(-chain) %>% 
       tidyr::pivot_longer(!c(t, method), names_to = "var")
   
   }
@@ -213,7 +213,7 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
   stan_traces <- stan_traces_c %>% 
     bind_rows(stan_traces_nc) %>% 
     # filter(chain == chosen_chain) %>% 
-    select(-chain) %>% 
+    # select(-chain) %>% 
     select(t, method, everything()) %>% 
     tidyr::pivot_longer(!c(t, method), names_to = "var")
   
@@ -230,13 +230,13 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
   
 }
 
-plot_traces <- function(df, title, subtext, size=0.2){
+plot_traces <- function(df, title, subtext, size=0.3){
   
   ggplot(df) +
-    geom_point(aes(x = t, y = value, color = var, alpha = t), size=size) + 
+    geom_point(aes(x = t, y = value, color = var), size=size) + 
     geom_vline(xintercept = 1000, linetype = 2) + 
     theme_bw() + 
-    viridis::scale_color_viridis(discrete=T) + 
+    scale_color_grey(start = 0.05, end = 0.10) + 
     xlab("") + 
     ylab("") + 
     theme(text=element_text(size=20),
@@ -332,7 +332,7 @@ if(PRIOR_ONLY == F){
     geom_point(aes(x = t, y = stepsize, color = method), size = 0.5) + 
     theme_bw() + 
     facet_wrap(method~.) + 
-    scale_color_viridis(discrete=T) + 
+    scale_color_grey(start = 0.05, end = 0.10) +  
     xlab("") + 
     theme(text=element_text(size=20),
           legend.position = "none",
