@@ -301,7 +301,7 @@ hw1_trace_plot <- plot_traces(hw1_traces %>% mutate(value = ifelse(method != "Gi
 hb1_trace_plot <- plot_traces(hb1_traces %>% mutate(value = ifelse(method != "Gibbs", 1/sqrt(value), value)), 
             title = "Standard Deviation Hyperparameter: Hidden Unit Biases", subtext = SUBTEXT, log = T)
 
-hw2_trace_plot <- plot_traces(hw2_traces %>% mutate(value = ifelse(method != "Gibbs", 1/sqrt(value), value)), 
+hw2_trace_plot <- plot_traces(hw2_traces %>% mutate(value = ifelse(method != "Gibbs", 1/sqrt(value) * 1/sqrt(8), value)), 
             title = "Standard Deviation Hyperparameter: Hidden-to-Output Weights", subtext = SUBTEXT, log = T)
 
 y_prec_trace_plot <- plot_traces(y_prec_traces %>% mutate(value = ifelse(method != "Gibbs", 1/sqrt(value), value)), 
