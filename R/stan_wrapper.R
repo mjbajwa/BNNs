@@ -909,5 +909,5 @@ outputs <- list(
 )
 
 write_rds(outputs, str_c(path, "/outputs.rds"))
-print(str_c("Stan Results", path))
+print(str_c("Stan Results: ", path))
   

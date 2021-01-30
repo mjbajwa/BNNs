@@ -31,17 +31,17 @@ save_plot <- function(plot_object, name){
 
 if(PRIOR_ONLY){
   
-  # Prior checks
+  # Prior (multi-chain)
 
-  stan_centered_path <- "stan_2021_01_29_15_22_30" 
-  stan_noncentered_path <- "stan_2021_01_29_15_27_47"
-  fbm_path <- "fbm_2021_01_27_20_04_25"
+  stan_centered_path <- "stan_2021_01_29_19_52_33" 
+  stan_noncentered_path <- "stan_2021_01_29_19_56_03"
+  fbm_path <- "fbm_2021_01_29_20_09_26"
   
 } else {
   
-  # Paths for complete runs - multi-chain etc.
+  # Posteriors
     
-  stan_centered_path <- "stan_2021_01_28_18_14_54" # stan_2021_01_27_20_10_37
+  stan_centered_path <- "stan_2021_01_29_20_30_44" # stan_2021_01_27_20_10_37
   stan_noncentered_path <- "stan_2021_01_28_18_19_02" # stan_2021_01_27_20_13_51
   fbm_path <- "fbm_2021_01_29_09_39_56"  # fbm_2021_01_27_20_33_55
     
@@ -134,7 +134,7 @@ y_vs_x_means %>% save_plot("y_vs_x_predictive_mean_only")
 
 markov_chain_samples <- function(stan_fit,
                                  var,
-                                 n_chains = 1,
+                                 n_chains = 4,
                                  burn_in = 1000,
                                  iters = 2000) {
   
@@ -170,7 +170,6 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
   if(!is.null(fbm_var)){
   
     fbm_traces <- fbm$outputs$traces[[fbm_var]] %>% 
-      mutate(chain = 1) %>% 
       mutate(method = "Gibbs") %>% 
       select(t, method, everything()) %>% 
       # filter(chain == chosen_chain) %>% 
@@ -271,7 +270,7 @@ plot_traces <- function(df, title, subtext, size = 0.2, thin = TRUE, log = FALSE
 # w1 -> W[1, , ]
 # w2 -> B[1, , ]
 # w3 -> W[2, , ]
-# w4 -> B[2, , ]
+# w4 -> B[1,2, ]
 # h1 -> W_prec[1]
 # h2 -> B_prec[2]
 # h3 -> W_prec[2]
@@ -279,7 +278,7 @@ plot_traces <- function(df, title, subtext, size = 0.2, thin = TRUE, log = FALSE
 w1_traces <- join_fbm_stan_traces(fbm_var = "w1", stan_var_pattern = "W\\[1", chosen_chain = 1, list_name = "desired_weight_vars")
 b1_traces <- join_fbm_stan_traces(fbm_var = "w2", stan_var_pattern = "B\\[1", chosen_chain = 1, list_name = "desired_bias_vars")
 w2_traces <- join_fbm_stan_traces(fbm_var = "w3", stan_var_pattern = "W\\[2", chosen_chain = 1, list_name = "desired_weight_vars")
-b2_traces <- join_fbm_stan_traces(fbm_var = "w4", stan_var_pattern = "B\\[2", chosen_chain = 1, list_name = "desired_bias_vars")
+b2_traces <- join_fbm_stan_traces(fbm_var = "w4", stan_var_pattern = "B\\[1,2", chosen_chain = 1, list_name = "desired_bias_vars")
 hw1_traces <- join_fbm_stan_traces(fbm_var = "h1", stan_var_pattern = "W_prec\\[1", chosen_chain = 1, list_name = "weights_desired_hp_vars")
 hb1_traces <- join_fbm_stan_traces(fbm_var = "h2", stan_var_pattern = "B_prec\\[1", chosen_chain = 1, list_name = "biases_desired_hp_vars")
 hw2_traces <- join_fbm_stan_traces(fbm_var = "h3", stan_var_pattern = "W_prec\\[2", chosen_chain = 1, list_name = "weights_desired_hp_vars")

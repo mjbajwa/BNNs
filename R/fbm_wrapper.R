@@ -6,73 +6,25 @@ library(ggplot2)
 library(stringr)
 library(viridis)
 library(gridExtra)
+library(readr)
 
-PRIOR_ONLY <- F
+PRIOR_ONLY <- T
 CHAINS <- c("1", "2", "3", "4")
 
 if(PRIOR_ONLY){
-  INPUT_PATH <- str_c("./fbm_logs/results_priors/")
-}
-
-load_and_compute_predictions <- function(CHAINS){
-  
-  df_fbm_raw <- tibble()
-  
-  for(chain in CHAINS){
-    
-    INPUT_PATH <- str_c("./fbm_logs/chain_", chain, "/results/")
-    
-    df_fbm_load <- data.frame(read.table(str_c(INPUT_PATH, "test_target_samples.txt"), header = FALSE, blank.lines.skip = TRUE, nrows = 100)) %>% 
-      janitor::clean_names() %>% 
-      as_tibble() %>% 
-      select(-v1, -v2)
-    
-    df_fbm_raw <- df_fbm_raw %>% 
-      bind_rows(df_fbm_load)
-    
-  }
-  
-  df_chains_agg <- df_fbm_raw %>% 
-    pivot_longer(cols = everything()) %>% 
-    group_by(name) %>% 
-    summarise(means = mean(value),
-              median = median(value),
-              x10_qnt = quantile(value, 0.10), 
-              x90_qnt = quantile(value, 0.90), 
-              x1_qnt = quantile(value, 0.01),
-              x99_qnt = quantile(value, 0.99)) %>% 
-    ungroup() %>% 
-    mutate(name = as.numeric(str_replace(name, "v", ""))) %>% 
-    arrange(name) %>% 
-    mutate(case = 1:n()) %>% 
-    select(-name) %>% 
-    select(case, everything())
-  
-  df_chains_agg
-  
+  BASE_DIR <- str_c("./fbm_logs/prior/")
+} else {
+  BASE_DIR <- str_c("./fbm_logs/posterior/")
 }
 
 # Load FBM Results ------------------------------------------------------
 
-# Method 1: Aggregations in R
-
-# df_fbm <- data.frame(read.table(str_c("./fbm_logs/chain_", "1", "/results/results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
-#   janitor::clean_names() %>% 
-#   as_tibble()
-# 
-# names(df_fbm) <- c("case", "inputs", "targets", "log_prob", "means", "error_2", "median", "error_median", "x10_qnt", "x90_qnt", "x1_qnt", "x99_qnt")
-# 
-# df_fbm_all_chains <- load_and_compute_predictions(CHAINS)
-# 
-# df_fbm <- df_fbm %>% 
-#   select(-means, -median, -contains("qnt")) %>% 
-#   left_join(df_fbm_all_chains, by = "case")
-
 # Method 2: Aggregations directly in FBM
 
-# output of net-pred itndqQp rlog_1.net 1000:%40 rlog_2.net 1000:%40 rlog_3.net 1000:%40 rlog_4.net 1000:%40 > results/comb
+# net-pred itndqQp rlog_1.net 1000:%40 rlog_2.net 1000:%40 rlog_3.net 1000:%40 rlog_4.net 1000:%40 > prior/combined_results.txt
+# net-pred itndqQp prior_log_1.net 1000:%40 prior_log_2.net 1000:%40 prior_log_3.net 1000:%40 prior_log_4.net 1000:%40 > prior/combined_results.txt
 
-df_fbm <- data.frame(read.table(str_c("./fbm_logs/results/combined_results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
+df_fbm <- data.frame(read.table(str_c(BASE_DIR, "combined_results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
   janitor::clean_names() %>% 
   as_tibble()
 
@@ -87,7 +39,7 @@ fbm_load_trace_data <- function(id, CHAINS){
   
   for(chain in CHAINS){
     
-    INPUT_PATH <- str_c("./fbm_logs/chain_", chain, "/results/")
+    INPUT_PATH <- str_c(BASE_DIR, "chain_", chain, "/")
 
     df_trace <- data.frame(read.table(str_c(INPUT_PATH, "traces_", id, ".txt"), header = FALSE)) %>% 
       janitor::clean_names() %>% 
@@ -219,7 +171,7 @@ if(!PRIOR_ONLY){
     
     for(iter in seq(1000, 2000, 100)){
     
-      df_stepsizes[[iter]] <- read.table(str_c("./fbm_logs/chain_", chain, "/results/stepsizes_", as.character(iter), ".txt"), 
+      df_stepsizes[[iter]] <- read.table(str_c(BASE_DIR, "chain_", chain, "/stepsizes_", as.character(iter), ".txt"), 
                                          header = FALSE, blank.lines.skip = TRUE, skip = 7, nrows = 25) %>% 
         janitor::clean_names() %>% 
         as_tibble() %>% 
@@ -271,3 +223,5 @@ if(PRIOR_ONLY == F){
 }
 
 write_rds(outputs, str_c(path, "/outputs.rds"))
+
+print(path)
