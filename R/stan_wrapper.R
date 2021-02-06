@@ -3,6 +3,7 @@
 
 # Load Libraries ----------------------------------------------------------
 
+library(yaml)
 library(rstan)
 library(dplyr)
 library(stringr)
@@ -13,68 +14,87 @@ library(reshape2)
 library(readr)
 set.seed(42)
 
+source("R/stan_utils.R")
+
+# Load YAML ---------------------------------------------------------------
+
+# args <- commandArgs(trailingOnly = TRUE)
+# YAML_INPUTS <- yaml::read_yaml(args[1])
+YAML_INPUTS <- yaml::read_yaml("config/noncentered.yaml")
+
 # Paths -------------------------------------------------------------------
 
-OUTPUT_PATH <- "./output/"
-STAN_FILE <- "./stan/bnns_noncentered.stan"
-INPUT_TYPE <- "fbm_example" # power_plant
-SCALE_INPUT <- F
-TRAIN_FRACTION <- 0.5
+OUTPUT_PATH <- YAML_INPUTS$OUTPUT_PATH
+STAN_FILE <- YAML_INPUTS$STAN_FILE
+INPUT_TYPE <- YAML_INPUTS$INPUT_TYPE
+SCALE_INPUT <- YAML_INPUTS$SCALE_INPUT
+TRAIN_FRACTION <- YAML_INPUTS$TRAIN_FRACTION
 
 # User Inputs -------------------------------------------------------------
 
 # Architecture Design
 
-G <- c(8)
-INFINITE_LIMIT <- c(1) 
-HIERARCHICAL_FLAG_W <- 1
-HIERARCHICAL_FLAG_B <- 1
-FIX_TARGET_NOISE <- 0
-SAMPLE_FROM_PRIOR <- 0
+G <- YAML_INPUTS$G
+INFINITE_LIMIT <- YAML_INPUTS$INFINITE_LIMIT 
+HIERARCHICAL_FLAG_W <- YAML_INPUTS$HIERARCHICAL_FLAG_W
+HIERARCHICAL_FLAG_B <- YAML_INPUTS$HIERARCHICAL_FLAG_B
+FIX_TARGET_NOISE <- YAML_INPUTS$FIX_TARGET_NOISE
+SAMPLE_FROM_PRIOR <- YAML_INPUTS$SAMPLE_FROM_PRIOR
 
 INIT_FUN <- function(...) {
-  list(
-    W_prec = rep(1, length(G) + 1),
-    B_prec = rep(1, length(G) + 1),
-    y_prec = 1,
-    W = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-    B = array(0, dim = c(max(max(G), 1), length(G) + 1)),
-    W_raw = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-    B_raw = array(0, dim = c(max(max(G), 1), length(G) + 1))
-  )
+  
+  if(str_detect("./stan/bnns_noncentered_log.stan", "log")){
+    list(
+      log_W_prec = log(YAML_INPUTS$INIT$WEIGHTS),
+      log_B_prec = log(YAML_INPUTS$INIT$BIASES),
+      log_y_prec = log(YAML_INPUTS$INIT$TARGET_NOISE), 
+      # W_prec = YAML_INPUTS$INIT$WEIGHTS,
+      # B_prec = YAML_INPUTS$INIT$BIASES,
+      # y_prec = YAML_INPUTS$INIT$TARGET_NOISE,
+      W = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
+      B = array(0, dim = c(max(max(G), 1), length(G) + 1)),
+      W_raw = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
+      B_raw = array(0, dim = c(max(max(G), 1), length(G) + 1))
+    )
+  
+  } else {
+    
+    list(
+      # log_W_prec = log(YAML_INPUTS$INIT$WEIGHTS),
+      # log_B_prec = log(YAML_INPUTS$INIT$BIASES),
+      # log_y_prec = log(YAML_INPUTS$INIT$TARGET_NOISE), 
+      W_prec = YAML_INPUTS$INIT$WEIGHTS,
+      B_prec = YAML_INPUTS$INIT$BIASES,
+      y_prec = YAML_INPUTS$INIT$TARGET_NOISE,
+      W = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
+      B = array(0, dim = c(max(max(G), 1), length(G) + 1)),
+      W_raw = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
+      B_raw = array(0, dim = c(max(max(G), 1), length(G) + 1))
+    )
+    
+    
+  }
   
 }
 
 # Prior definition using FBM language
 
 FBM_W <- list(
-  "GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-  "GAMMA_ALPHA" = rep(0.5, length(G) + 1)
+  "GAMMA_WIDTH" = YAML_INPUTS$PRIORS$WEIGHTS$WIDTH,
+  "GAMMA_ALPHA" = YAML_INPUTS$PRIORS$WEIGHTS$ALPHA
 )
 
 FBM_B <- list(
-  "GAMMA_WIDTH" = rep(0.05, length(G) + 1),
-  "GAMMA_ALPHA" = rep(0.5, length(G) + 1)
+  "GAMMA_WIDTH" = YAML_INPUTS$PRIORS$BIASES$WIDTH,
+  "GAMMA_ALPHA" = YAML_INPUTS$PRIORS$BIASES$ALPHA
 )
 
-FBM_Y <- list("GAMMA_WIDTH" = rep(0.05, 1),
-              "GAMMA_ALPHA" = rep(0.5, 1))
+FBM_Y <- list("GAMMA_WIDTH" = YAML_INPUTS$PRIORS$TARGET$WIDTH,
+              "GAMMA_ALPHA" = YAML_INPUTS$PRIORS$TARGET$ALPHA)
 
 # MCMC control for stan
 
-MCMC_INPUTS <- list(
-  "CHAINS" = 4,
-  "CORES" = 4,
-  "ITER" = 2000,
-  "BURN_IN" = 1000,
-  "CONTROL" = list(
-    max_treedepth = 10, # Default is 10 -- 11
-    adapt_gamma = 0.05, # Default is 0.05 -- 0.01
-    adapt_kappa = 0.75,
-    adapt_t0 = 10,
-    adapt_delta = 0.8 # Default is 0.8 (Increased because of Langevin may be over-estimating step-size for good sampling) -- 0.9
-  )
-)
+MCMC_INPUTS <- YAML_INPUTS$MCMC_INPUTS
 
 # Constants ---------------------------------------------------------------
 
@@ -100,25 +120,6 @@ INPUTS <- list(
 
 capture.output(c(INPUTS, MCMC_INPUTS), file = str_c(path, '/inputs.txt'))
 
-# FBM to Stan Conversion of Prior -------------------------------------------------------
-
-# TODO: add to utils.R
-
-fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha) {
-  
-  # TODO: check with Prof Neal this re-parametrization is correct.
-  
-  mean_precision = 1 / (fbm_width ^ 2)
-  stan_alpha = fbm_alpha / 2
-  stan_beta = stan_alpha / mean_precision
-  
-  output = list("STAN_ALPHA" = stan_alpha,
-                "STAN_BETA" = stan_beta)
-  
-  return(output)
-  
-}
-
 # Convert FBM parameterization to STAN parametrization ---------------
 
 # Shape = alpha, Scale = beta
@@ -137,42 +138,16 @@ Y_gamma_scale <- Y_STAN$STAN_BETA
 
 # Check Prior
 
-precision_w <- rgamma(n = 1000, shape = W_gamma_shape[1], scale = 1 / W_gamma_scale[1])
-precision_b <- rgamma(n = 1000, shape = B_gamma_shape[1], scale = 1 / B_gamma_scale[1])
-precision_y <- rgamma(n = 1000, shape = Y_gamma_shape[1], scale = 1 / Y_gamma_scale[1])
-
-par(mfrow = c(3, 1))
-hist(log10(1 / sqrt(precision_w)), col = "red2", main = "Weights (log10 sdev)")
-hist(log10(1 / sqrt(precision_b)), col = "red2", main = "Biases (log10 sdev)")
-hist(log10(1 / sqrt(precision_y)), col = "red2", main = "Measurement Noise (log10 sdev)")
+# precision_w <- rgamma(n = 1000, shape = W_gamma_shape[1], scale = 1 / W_gamma_scale[1])
+# precision_b <- rgamma(n = 1000, shape = B_gamma_shape[1], scale = 1 / B_gamma_scale[1])
+# precision_y <- rgamma(n = 1000, shape = Y_gamma_shape[1], scale = 1 / Y_gamma_scale[1])
+# 
+# # par(mfrow = c(3, 1))
+# # hist(log10(1 / sqrt(precision_w)), col = "red2", main = "Weights (log10 sdev)")
+# # hist(log10(1 / sqrt(precision_b)), col = "red2", main = "Biases (log10 sdev)")
+# # hist(log10(1 / sqrt(precision_y)), col = "red2", main = "Measurement Noise (log10 sdev)")
 
 # Load Data -----------------------------------------------------------
-
-read_input_data <- function(input_type = "fbm_example|power_plant") {
-  
-  # Load data
-  
-  if (input_type == "fbm_example") {
-    
-    df <- data.frame(read.table("./data/rdata", header = FALSE))
-    colnames(df) <- c("V1", "Y")
-    target_col <- "Y"
-    
-  } else if (input_type == "power_plant") {
-    
-    df <- read.csv("./data/power-plant.csv", header = TRUE)
-    colnames(df) <- c("V1", "V2", "V3", "V4", "Y")
-    target_col <- "Y"
-    
-  } else {
-    
-    break
-    
-  }
-  
-  return(df)
-  
-}
 
 df <- read_input_data(INPUT_TYPE)
 
@@ -227,152 +202,12 @@ fit <- stan(
   warmup = MCMC_INPUTS$BURN_IN,
   iter = MCMC_INPUTS$ITER,
   cores = MCMC_INPUTS$CORES,
-  verbose = TRUE,
-  refresh = 10,
-  seed = 42,
+  verbose = FALSE,
+  refresh = 100,
+  seed = 42, # set to 42 for all previous results (date < Feb-04).
   algorithm = "NUTS",
   control = MCMC_INPUTS$CONTROL
 )
-
-# Utility Functions -------------------------------------------------------
-
-# TODO: Port to utils.R
-
-parse_stan_vars <- function(vars,
-                            stan_pattern = "W",
-                            index_dim = 3,
-                            column_names = c("layer", "incoming_neuron", "outgoing_neuron")) {
-  
-  #' Parses stan variables
-  
-  temp <- str_replace(vars, str_c(stan_pattern, "\\["), "") %>%
-    str_replace(str_c(stan_pattern, "_raw", "\\["), "") %>% 
-    str_replace("\\]", "") %>%
-    str_split(",", n = index_dim) %>%
-    lapply(function(x) {
-      c(x)
-    })
-  
-  parsed_outputs <-
-    matrix(data = 0,
-           nrow = length(temp),
-           ncol = index_dim)
-  
-  for (i in 1:length(temp)) {
-    parsed_outputs[i, ] <- as.numeric(temp[i] %>% unlist())
-  }
-  
-  df_parsed <- as_tibble(parsed_outputs)
-  names(df_parsed) <- column_names
-  df_parsed <- df_parsed %>%
-    mutate(stan_var_name = vars) %>%
-    select(stan_var_name, everything())
-  
-  return(df_parsed)
-  
-}
-
-markov_chain_samples <- function(stan_fit,
-                                 var,
-                                 n_chains = MCMC_INPUTS$CHAINS,
-                                 burn_in = 1000,
-                                 iters = 2000) {
-    
-    # Create empty dataframe to save results
-    
-    df_chains <- as_tibble(matrix(
-      data = 0,
-      nrow = iters,
-      ncol = n_chains
-    ))
-    names(df_chains) <-
-      as.vector(unlist(lapply(as.list(1:n_chains), function(x) {
-        paste("chain_", x, sep = "")
-      })))
-    
-    # Loop through each chain and extract the samples
-    
-    for (chain in 1:n_chains) {
-      temp <- stan_fit@sim$samples[[chain]]
-      parameter_samples <- temp[[var]]
-      
-      df_chains[as.character(paste("chain_", chain, sep = ""))] <-
-        parameter_samples
-      
-    }
-    
-    # Calculate across chain averages (TODO: might also want to do within chain averages for R_hat)
-    
-    df_chains["time_index"] = 1:nrow(df_chains)
-    
-    df_chain_summary <- df_chains %>%
-      reshape2::melt(id.vars = "time_index") %>%
-      group_by(time_index) %>%
-      summarize(mean_chains = mean(value),
-                sdev_chains = sd(value)) %>%
-      ungroup()
-    
-    # Join the summary with final
-    
-    df_chains["var"] = var
-    df_chains["stationary"] = ifelse(1:nrow(df_chains) > burn_in, T, F)
-    
-    df_chains <- df_chains %>%
-      left_join(df_chain_summary, by = "time_index")
-    
-    return(df_chains)
-    
-}
-
-mcmc_trace_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) {
-    
-  df_plot <- df_mcmc_param %>%
-      select(time_index, contains("chain_")) %>%
-      reshape2::melt(id.vars = "time_index",) %>%
-      mutate(stationary = ifelse(time_index > burn_in, T, F))
-    
-  ggplot(df_plot %>% filter(time_index > min_time)) +
-    geom_point(aes(
-      x = time_index,
-      y = value,
-      color = variable,
-      alpha = stationary
-    ),
-    size = 0.5) +
-    scale_alpha_manual(values = c(0.20, 1)) +
-    geom_vline(xintercept = burn_in,
-               linetype = 2) +
-    theme_bw() +
-    ggtitle(str_c(unique(df_mcmc_param$var))) +
-    xlab("") +
-    ylab("") +
-    theme(text = element_text(size = 20),
-          legend.position = "none")
-  
-}
-
-mcmc_density_plot <- function(df_mcmc_param, var, burn_in = 1000, min_time = 0) {
-  
-  df_plot <- df_mcmc_param %>%
-    select(time_index, contains("chain_")) %>%
-    reshape2::melt(id.vars = "time_index",) %>%
-    mutate(stationary = ifelse(time_index > burn_in, T, F))
-  
-  ggplot(df_plot %>% filter(time_index > burn_in)) +
-    geom_density(aes(
-      x = value,
-      color = variable,
-      alpha = 0.5
-    ),
-    size = 0.5) +
-    theme_bw() +
-    ggtitle(str_c(unique(df_mcmc_param$var))) +
-    xlab("") +
-    ylab("") +
-    theme(text = element_text(size = 20),
-          legend.position = "none")
-  
-}
 
 # Postprocessing -------------------------------------------------------------
 
@@ -480,9 +315,6 @@ yx_unfiltered_plot <-
   facet_wrap(label ~ ., scales = "free") +
   ggtitle("Y vs. X")
 
-# par(mfrow=c(1,1))
-# df_post_preds$Rhat %>% hist(col = "red2", main="R-hat distribution for predicted values of y")
-
 # Trace Plot Analysis of MCMC for weights/biases ---------------------------------------------
 
 weights_parsed <- parse_stan_vars(hidden_weights_names, "W", 3)
@@ -567,12 +399,11 @@ for (l in 1:(length(G) + 1)) {
   
 }
 
-# Trace Plots  ------------------------------------------------------------
+##  Trace Plots
 
 # Weights
 
 weight_trace_plots <- list()
-weight_density_plots <- list()
 
 for (i in 1:length(desired_weight_vars)) {
   
@@ -584,11 +415,6 @@ for (i in 1:length(desired_weight_vars)) {
                                                     iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
   
-  weight_density_plots[[var]] <- markov_chain_samples(fit,
-                                                    var,
-                                                    burn_in = MCMC_INPUTS$BURN_IN,
-                                                    iters = MCMC_INPUTS$ITER) %>%
-    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
 }
 
 
@@ -596,69 +422,49 @@ for (i in 1:length(desired_weight_vars)) {
 
 weights_desired_hp_vars <- df_weights_hp_posterior$stan_var_name
 weights_hp_trace_plots <- list()
-weights_hp_density_plots <- list()
 
 for (i in 1:length(weights_desired_hp_vars)) {
   
   var <- weights_desired_hp_vars[i]
   
   weights_hp_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                               var,
-                                                               burn_in = MCMC_INPUTS$BURN_IN,
-                                                               iters = MCMC_INPUTS$ITER) %>%
+                                                         var,
+                                                         burn_in = MCMC_INPUTS$BURN_IN,
+                                                         iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
-  
-  weights_hp_density_plots[[var]] <- markov_chain_samples(fit,
-                                                  var,
-                                                  burn_in = MCMC_INPUTS$BURN_IN,
-                                                  iters = MCMC_INPUTS$ITER) %>%
-    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
   
 }
 
 # Biases
 
 bias_trace_plots <- list()
-bias_density_plots <- list()
 
 for (i in 1:length(desired_bias_vars)) {
   
   var <- desired_bias_vars[i]
   
   bias_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                    var,
-                                                    burn_in = MCMC_INPUTS$BURN_IN,
-                                                    iters = MCMC_INPUTS$ITER) %>%
+                                                  var,
+                                                  burn_in = MCMC_INPUTS$BURN_IN,
+                                                  iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
-  
-  bias_density_plots[[var]] <- markov_chain_samples(fit,
-                                                      var,
-                                                      burn_in = MCMC_INPUTS$BURN_IN,
-                                                      iters = MCMC_INPUTS$ITER) %>%
-    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
+
 }
 
 # Bias Hyperparameters
 
 biases_desired_hp_vars <- df_biases_hp_posterior$stan_var_name
 biases_hp_trace_plots <- list()
-biases_hp_density_plots <- list()
 
 for (i in 1:length(biases_desired_hp_vars)) {
   
   var <- biases_desired_hp_vars[i]
   
   biases_hp_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                               var,
-                                                               burn_in = MCMC_INPUTS$BURN_IN,
-                                                               iters = MCMC_INPUTS$ITER) %>%
+                                                       var,
+                                                       burn_in = MCMC_INPUTS$BURN_IN,
+                                                       iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
-  
-  biases_hp_density_plots[[var]] <- markov_chain_samples(fit,
-                                                  var,
-                                                  burn_in = MCMC_INPUTS$BURN_IN,
-                                                  iters = MCMC_INPUTS$ITER) %>%
-    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
   
 }
 
@@ -666,154 +472,18 @@ for (i in 1:length(biases_desired_hp_vars)) {
 
 target_noise_hp_vars <- df_noise_hp_posterior$stan_var_name
 target_noise_trace_plots <- list()
-target_noise_density_plots <- list()
 
 for (i in 1:length(target_noise_hp_vars)) {
   
   var <- target_noise_hp_vars[i]
   
   target_noise_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                                      var,
-                                                                      burn_in = MCMC_INPUTS$BURN_IN,
-                                                                      iters = MCMC_INPUTS$ITER) %>%
+                                                          var,
+                                                          burn_in = MCMC_INPUTS$BURN_IN,
+                                                          iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
   
-  target_noise_density_plots[[var]] <- markov_chain_samples(fit,
-                                                         var,
-                                                         burn_in = MCMC_INPUTS$BURN_IN,
-                                                         iters = MCMC_INPUTS$ITER) %>%
-    mcmc_density_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
-  
 }
-
-
-# Save Results ------------------------------------------------------------
-
-# Prediction Plots
-
-ggsave(
-  str_c(path, "/predicted_vs_actual.png"),
-  pred_actual_plot,
-  width = 11,
-  height = 8
-)
-
-ggsave(
-  str_c(path, "/y_vs_x_unfiltered.png"),
-  yx_unfiltered_plot,
-  width = 11,
-  height = 8
-)
-
-# Weights
-
-png(
-  str_c(path, "/", "weight_traces", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", weight_trace_plots)
-dev.off()
-
-png(
-  str_c(path, "/", "weight_density", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", weight_density_plots)
-dev.off()
-
-# Weights hyperparameters
-
-png(
-  str_c(path, "/", "weights_hp_traces", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", weights_hp_trace_plots)
-dev.off()
-
-png(
-  str_c(path, "/", "weights_hp_density", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", weights_hp_density_plots)
-dev.off()
-
-# Biases
-
-png(
-  str_c(path, "/", "biases_traces", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", bias_trace_plots)
-dev.off()
-
-png(
-  str_c(path, "/", "biases_density", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", bias_density_plots)
-dev.off()
-
-# Biases hyperparameters
-
-png(
-  str_c(path, "/", "biases_hp_traces", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", biases_hp_trace_plots)
-dev.off()
-
-png(
-  str_c(path, "/", "biases_hp_density", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", biases_hp_density_plots)
-dev.off()
-
-# Target noise
-
-png(
-  str_c(path, "/", "target_noise_trace", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", target_noise_trace_plots)
-dev.off()
-
-png(
-  str_c(path, "/", "target_noise_density", ".png"),
-  width = 20,
-  height = 12,
-  units = "in",
-  res = 100
-)
-do.call("grid.arrange", target_noise_density_plots)
-dev.off()
 
 # Get Rejection Rate ------------------------------------------------------
 
@@ -856,12 +526,6 @@ chain_statistics <- df_plot_stats %>%
         legend.position = "none")
 
 capture.output(df_plot_stats_mean, file = str_c(path, '/chain_stats.txt'))
-ggsave(
-  str_c(path, "/chain_statistics.png"),
-  chain_statistics,
-  width = 11,
-  height = 8
-)
 
 # Step-Size Behavior During Sampling --------------------------------
 
@@ -875,7 +539,7 @@ for (chain in 1:length(sampler_params)) {
   
 }
 
-stepsize_plots <- ggplot(df_samples %>% filter(iter %in% 100:2000)) +
+stepsize_plots <- ggplot(df_samples %>% filter(iter %in% 100:MCMC_INPUTS$ITER)) +
   geom_line(aes(x = iter, y = stepsize__, color = chain),
             alpha = 0.8) +
   theme_bw() +
@@ -883,12 +547,104 @@ stepsize_plots <- ggplot(df_samples %>% filter(iter %in% 100:2000)) +
   xlab("Iteration") + 
   ylab("Step Size")
 
-ggsave(
-  str_c(path, "/stepsize_plots.png"),
-  stepsize_plots,
-  width = 11,
-  height = 8
-)
+# Save Results ------------------------------------------------------------
+
+if(YAML_INPUTS$SAVE_PLOTS){
+  
+  # Prediction Plots
+  
+  ggsave(
+    str_c(path, "/predicted_vs_actual.png"),
+    pred_actual_plot,
+    width = 11,
+    height = 8
+  )
+  
+  ggsave(
+    str_c(path, "/y_vs_x_unfiltered.png"),
+    yx_unfiltered_plot,
+    width = 11,
+    height = 8
+  )
+  
+  # Weights Traces
+  
+  png(
+    str_c(path, "/", "weight_traces", ".png"),
+    width = 20,
+    height = 12,
+    units = "in",
+    res = 100
+  )
+  do.call("grid.arrange", weight_trace_plots)
+  dev.off()
+  
+  # Weights hyperparameters
+  
+  png(
+    str_c(path, "/", "weights_hp_traces", ".png"),
+    width = 20,
+    height = 12,
+    units = "in",
+    res = 100
+  )
+  do.call("grid.arrange", weights_hp_trace_plots)
+  dev.off()
+  
+  
+  # Biases
+  
+  png(
+    str_c(path, "/", "biases_traces", ".png"),
+    width = 20,
+    height = 12,
+    units = "in",
+    res = 100
+  )
+  do.call("grid.arrange", bias_trace_plots)
+  dev.off()
+  
+  # Biases hyperparameters
+  
+  png(
+    str_c(path, "/", "biases_hp_traces", ".png"),
+    width = 20,
+    height = 12,
+    units = "in",
+    res = 100
+  )
+  do.call("grid.arrange", biases_hp_trace_plots)
+  dev.off()
+  
+  # Target noise
+  
+  png(
+    str_c(path, "/", "target_noise_trace", ".png"),
+    width = 20,
+    height = 12,
+    units = "in",
+    res = 100
+  )
+  do.call("grid.arrange", target_noise_trace_plots)
+  dev.off()
+  
+  # Stepsize and other auxillaries
+  
+  ggsave(
+    str_c(path, "/stepsize_plots.png"),
+    stepsize_plots,
+    width = 11,
+    height = 8
+  )
+  
+  ggsave(
+    str_c(path, "/chain_statistics.png"),
+    chain_statistics,
+    width = 11,
+    height = 8
+  )
+
+}
 
 # Return Object -----------------------------------------------------------
 

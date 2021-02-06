@@ -12,7 +12,7 @@ library(viridis)
 
 # Configure paths ---------------------------------------------------------
 
-PRIOR_ONLY <- T
+PRIOR_ONLY <- F
 OUTPUT_PATH <- "./output/"
 folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
 path <- str_c(OUTPUT_PATH, "combined_", folder_name)
@@ -41,9 +41,9 @@ if(PRIOR_ONLY){
   
   # Posteriors
     
-  stan_centered_path <- "stan_2021_01_29_20_30_44" # stan_2021_01_27_20_10_37
-  stan_noncentered_path <- "stan_2021_01_28_18_19_02" # stan_2021_01_27_20_13_51
-  fbm_path <- "fbm_2021_01_29_09_39_56"  # fbm_2021_01_27_20_33_55
+  stan_centered_path <- "stan_2021_02_01_12_50_42" # stan_2021_01_29_20_30_44
+  stan_noncentered_path <- "stan_2021_02_01_11_18_11" # stan_2021_01_28_18_19_02
+  fbm_path <- "fbm_2021_02_01_15_49_39"  # fbm_2021_01_29_09_39_56  
     
 }
 
@@ -136,7 +136,7 @@ markov_chain_samples <- function(stan_fit,
                                  var,
                                  n_chains = 4,
                                  burn_in = 1000,
-                                 iters = 2000) {
+                                 iters = 20000) {
   
   # Create empty dataframe to save results
   
@@ -231,11 +231,11 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
   
 }
 
-plot_traces <- function(df, title, subtext, size = 0.2, thin = TRUE, log = FALSE){
+plot_traces <- function(df, title, subtext, size = 0.15, thin = TRUE, log = FALSE){
   
   if(thin == TRUE){
     iters <- unique(w1_traces$t)
-    keep_iters <- iters[seq(1, length(iters), 5)]
+    keep_iters <- iters[seq(1, length(iters), 50)]
   }
   
   final_plot <- ggplot(df %>% filter(t %in% keep_iters)) +
@@ -287,7 +287,7 @@ y_prec_traces <- join_fbm_stan_traces(fbm_var = "y_sdev", stan_var_pattern = "y_
 if(PRIOR_ONLY == F){
   SUBTEXT <- "Vertical line indicates starting point of values used as representative samples. Four chains are used for consistent comparison. \nEvery fifth sample shown."
 } else {
-  SUBTEXT <- "Only one chain used."
+  SUBTEXT <- "Four chains were used. Every fifth sample is shown."
 }
 
 w1_trace_plot <- plot_traces(w1_traces, title = "Input-to-Hidden Weights", subtext = SUBTEXT)
@@ -307,7 +307,7 @@ hw2_trace_plot <- plot_traces(hw2_traces %>% mutate(value = ifelse(method != "Gi
 y_prec_trace_plot <- plot_traces(y_prec_traces %>% mutate(value = ifelse(method != "Gibbs", 1/sqrt(value), value)), 
             title = "Standard Deviation Hyperparameter: Target Noise", 
             subtext = SUBTEXT, 
-            size = 0.8, log = T)
+            size = 0.5, log = T)
 
 # Save plots
 

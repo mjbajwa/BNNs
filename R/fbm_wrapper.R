@@ -8,7 +8,7 @@ library(viridis)
 library(gridExtra)
 library(readr)
 
-PRIOR_ONLY <- T
+PRIOR_ONLY <- F
 CHAINS <- c("1", "2", "3", "4")
 
 if(PRIOR_ONLY){
@@ -21,7 +21,7 @@ if(PRIOR_ONLY){
 
 # Method 2: Aggregations directly in FBM
 
-# net-pred itndqQp rlog_1.net 1000:%40 rlog_2.net 1000:%40 rlog_3.net 1000:%40 rlog_4.net 1000:%40 > prior/combined_results.txt
+# net-pred itndqQp rlog_1.net 1000:%40 rlog_2.net 1000:%40 rlog_3.net 1000:%40 rlog_4.net 1000:%40 > posterior/combined_results.txt
 # net-pred itndqQp prior_log_1.net 1000:%40 prior_log_2.net 1000:%40 prior_log_3.net 1000:%40 prior_log_4.net 1000:%40 > prior/combined_results.txt
 
 df_fbm <- data.frame(read.table(str_c(BASE_DIR, "combined_results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
@@ -39,7 +39,7 @@ fbm_load_trace_data <- function(id, CHAINS){
   
   for(chain in CHAINS){
     
-    INPUT_PATH <- str_c(BASE_DIR, "chain_", chain, "/")
+    INPUT_PATH <- str_c(BASE_DIR, "chain_", chain, "/results/")
 
     df_trace <- data.frame(read.table(str_c(INPUT_PATH, "traces_", id, ".txt"), header = FALSE)) %>% 
       janitor::clean_names() %>% 
@@ -171,7 +171,7 @@ if(!PRIOR_ONLY){
     
     for(iter in seq(1000, 2000, 100)){
     
-      df_stepsizes[[iter]] <- read.table(str_c(BASE_DIR, "chain_", chain, "/stepsizes_", as.character(iter), ".txt"), 
+      df_stepsizes[[iter]] <- read.table(str_c(BASE_DIR, "chain_", chain, "/results/stepsizes_", as.character(iter), ".txt"), 
                                          header = FALSE, blank.lines.skip = TRUE, skip = 7, nrows = 25) %>% 
         janitor::clean_names() %>% 
         as_tibble() %>% 

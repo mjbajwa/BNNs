@@ -1,7 +1,7 @@
 ---
 title: "BNNs Hyperparameter Sampling: Comparing Gibbs vs. HMC (NUTS)"
 # author: "Jamal Bajwa"
-date: "01/27/2021"
+date: "01/28/2021"
 output: 
   beamer_presentation:    
     theme: "boxes"
@@ -17,10 +17,10 @@ knitr::opts_chunk$set(echo = FALSE, fig.align="center")
 
 ## Overview
 
-Three sampling techniques:
+Three sampling techniques for parameters/hyperparameters:
 
-- HMC (Centered Parametrization, NUTS)
-- HMC (Non-Centered Parametrization, NUTS)
+- HMC (Centered Parametrization, NUTS for adaptation)
+- HMC (Non-Centered Parametrization, NUTS for adaptation)
 - FBM (Gibbs sampling for hyperparameters, HMC for all others)
 
 ## Centered vs. Non-Centered Parametrization

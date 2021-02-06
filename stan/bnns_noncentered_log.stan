@@ -57,12 +57,12 @@ parameters {
   
   // Standard Deviation of likelihood
   
-  real<lower=0> y_prec;
+  real log_y_prec;
 
   // Standard Deviation of Weights and biases
   
-  vector<lower=0>[h+1] W_prec;
-  vector<lower=0>[h+1] B_prec; // <lower=1e-6, upper=1e6>[
+  vector[h+1] log_W_prec;
+  vector[h+1] log_B_prec; // <lower=1e-6, upper=1e6>[
   
 }
 
@@ -81,6 +81,12 @@ transformed parameters {
   matrix[max(G), h] z[N]; // outputs of hidden layers. Array index by oberservation
   vector[N] y_train_pred;
   
+  // Exponentiate log variables
+  
+  real y_prec = exp(log_y_prec);
+  vector[h+1] W_prec = exp(log_W_prec);
+  vector[h+1] B_prec = exp(log_B_prec);
+  
   // ****** Re-parametrization ******
 
   // Weights
@@ -94,7 +100,7 @@ transformed parameters {
       for(g_in in 1:K){
         for(g_out in 1:G[l]){
           if(use_hierarchical_w == 1){
-            W[l][g_in, g_out] = 1/sqrt(W_prec[l]) * W_raw[l][g_in, g_out]; // normal(0, 1/sqrt(W_prec[l])); //
+            W[l][g_in, g_out] = 1/sqrt(W_prec[l]) * W_raw[l][g_in, g_out]; // normal(0, 1/sqrt(log_W_prec[l])); //
           } else {
             W[l][g_in, g_out] = 100 * W_raw[l][g_in, g_out]; // normal(0, 100);
           }
@@ -178,21 +184,21 @@ transformed parameters {
   //     }
   //   }
   // }
-// 
-//   // Intercepts
-// 
-//   for(l in 1:(h+1)){
-//     if (l == h+1){
-//       for(g in 2:rows(B)){
-//         B[g, l] = 100 * B_raw[g, l];
-//       }
-//     } else {
-//       // For all other layers, index only on useful weights
-//       for(g in (G[l]+1):rows(B)) {
-//         B[g, l] = 100 * B_raw[g, l];
-//       }
-//     }
-//   }
+  // 
+  // // Intercepts
+  // 
+  // for(l in 1:(h+1)){
+  //   if (l == h+1){
+  //     for(g in 2:rows(B)){
+  //       B[g, l] = 100 * B_raw[g, l];
+  //     }
+  //   } else {
+  //     // For all other layers, index only on useful weights
+  //     for(g in (G[l]+1):rows(B)) {
+  //       B[g, l] = 100 * B_raw[g, l];
+  //     }
+  //   }
+  // }
   
   // ****** Forward Pass of Neural Network ******
 
@@ -296,7 +302,7 @@ model {
       
       // For the output Layer -- only one bias term matters
       
-      // B_prec[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
+      B_prec[l] ~ gamma(B_gamma_shape[l], B_gamma_scale[l]);
       B_raw[1, l] ~ normal(0, 1); // B[1, l] ~ normal(0, B_sdev[l])
       
     } else {
@@ -338,7 +344,7 @@ model {
   //     }
   //   }
   // }
-  // 
+
   // // Intercepts
   // 
   // for(l in 1:(h+1)){
@@ -353,7 +359,21 @@ model {
   //     }
   //   }
   // }
-    
+  
+  // ****** Jacobian adjustments due to application of priors on transformed parameters ****** 
+  
+  // y = exp(x); where y = w_prec, and x = log(w_prec); dy/dx = exp(x) --> log(|dy/dx|) = log(exp(x)) = x
+  
+  target += log_y_prec;
+  
+  for(l in 1:(h+1)){
+    target += log_W_prec[l];
+  }
+  
+  for(l in 1:h){
+    target += log_B_prec[l];
+  }
+
 }
 
 generated quantities {
