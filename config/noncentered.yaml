@@ -3,7 +3,7 @@
 OUTPUT_PATH: "./output/"
 STAN_FILE: "./stan/bnns_noncentered.stan"
 INPUT_TYPE: "fbm_example"
-SAVE_PLOTS: FALSE
+SAVE_PLOTS: TRUE
 
 # Data Preprocessing
 
@@ -30,7 +30,7 @@ PRIORS:
     
   TARGET:
     WIDTH: [0.05]
-    ALPHA: [0.05]
+    ALPHA: [0.5]
 
 # Likelihood configuration
 
@@ -52,8 +52,8 @@ INIT:
 MCMC_INPUTS:
   CHAINS: 4
   CORES: 4
-  ITER: 50000
-  BURN_IN: 25000
+  ITER: 10000
+  BURN_IN: 1000
   CONTROL: 
     max_treedepth: 10 # Default is 10
     adapt_gamma: 0.05 # Default is 0.05

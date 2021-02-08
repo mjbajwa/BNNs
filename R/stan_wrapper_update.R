@@ -205,7 +205,7 @@ fit <- stan(
   iter = MCMC_INPUTS$ITER,
   cores = MCMC_INPUTS$CORES,
   verbose = FALSE,
-  refresh = 100,
+  refresh = 1000,
   seed = 42, # set to 42 for all previous results (date < Feb-04).
   algorithm = "NUTS",
   control = MCMC_INPUTS$CONTROL
@@ -401,91 +401,17 @@ for (l in 1:(length(G) + 1)) {
   
 }
 
-##  Trace Plots
-
-# Weights
-
-weight_trace_plots <- list()
-
-for (i in 1:length(desired_weight_vars)) {
-  
-  var <- desired_weight_vars[i]
-  
-  weight_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                    var,
-                                                    burn_in = MCMC_INPUTS$BURN_IN,
-                                                    iters = MCMC_INPUTS$ITER) %>%
-    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
-  
-}
-
-
 # Weight hyperparameters
 
 weights_desired_hp_vars <- df_weights_hp_posterior$stan_var_name
-weights_hp_trace_plots <- list()
-
-for (i in 1:length(weights_desired_hp_vars)) {
-  
-  var <- weights_desired_hp_vars[i]
-  
-  weights_hp_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                         var,
-                                                         burn_in = MCMC_INPUTS$BURN_IN,
-                                                         iters = MCMC_INPUTS$ITER) %>%
-    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
-  
-}
-
-# Biases
-
-bias_trace_plots <- list()
-
-for (i in 1:length(desired_bias_vars)) {
-  
-  var <- desired_bias_vars[i]
-  
-  bias_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                  var,
-                                                  burn_in = MCMC_INPUTS$BURN_IN,
-                                                  iters = MCMC_INPUTS$ITER) %>%
-    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
-
-}
 
 # Bias Hyperparameters
 
 biases_desired_hp_vars <- df_biases_hp_posterior$stan_var_name
-biases_hp_trace_plots <- list()
-
-for (i in 1:length(biases_desired_hp_vars)) {
-  
-  var <- biases_desired_hp_vars[i]
-  
-  biases_hp_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                       var,
-                                                       burn_in = MCMC_INPUTS$BURN_IN,
-                                                       iters = MCMC_INPUTS$ITER) %>%
-    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
-  
-}
 
 # Target noise
 
 target_noise_hp_vars <- df_noise_hp_posterior$stan_var_name
-target_noise_trace_plots <- list()
-
-for (i in 1:length(target_noise_hp_vars)) {
-  
-  var <- target_noise_hp_vars[i]
-  
-  target_noise_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                          var,
-                                                          burn_in = MCMC_INPUTS$BURN_IN,
-                                                          iters = MCMC_INPUTS$ITER) %>%
-    mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
-  
-}
 
 # Get Rejection Rate ------------------------------------------------------
 
@@ -569,67 +495,6 @@ if(YAML_INPUTS$SAVE_PLOTS){
     height = 8
   )
   
-  # Weights Traces
-  
-  png(
-    str_c(path, "/", "weight_traces", ".png"),
-    width = 20,
-    height = 12,
-    units = "in",
-    res = 100
-  )
-  do.call("grid.arrange", weight_trace_plots)
-  dev.off()
-  
-  # Weights hyperparameters
-  
-  png(
-    str_c(path, "/", "weights_hp_traces", ".png"),
-    width = 20,
-    height = 12,
-    units = "in",
-    res = 100
-  )
-  do.call("grid.arrange", weights_hp_trace_plots)
-  dev.off()
-  
-  
-  # Biases
-  
-  png(
-    str_c(path, "/", "biases_traces", ".png"),
-    width = 20,
-    height = 12,
-    units = "in",
-    res = 100
-  )
-  do.call("grid.arrange", bias_trace_plots)
-  dev.off()
-  
-  # Biases hyperparameters
-  
-  png(
-    str_c(path, "/", "biases_hp_traces", ".png"),
-    width = 20,
-    height = 12,
-    units = "in",
-    res = 100
-  )
-  do.call("grid.arrange", biases_hp_trace_plots)
-  dev.off()
-  
-  # Target noise
-  
-  png(
-    str_c(path, "/", "target_noise_trace", ".png"),
-    width = 20,
-    height = 12,
-    units = "in",
-    res = 100
-  )
-  do.call("grid.arrange", target_noise_trace_plots)
-  dev.off()
-  
   # Stepsize and other auxillaries
   
   ggsave(
@@ -650,6 +515,10 @@ if(YAML_INPUTS$SAVE_PLOTS){
 
 # Return Object -----------------------------------------------------------
 
+remove_log_terms <- function(x){
+  x[!str_detect(x, "log")]
+}
+
 outputs <- list(
   
   "stan_file" = STAN_FILE,
@@ -659,9 +528,9 @@ outputs <- list(
     "df_predictions" = df_post_preds,
     "desired_weight_vars" = desired_weight_vars,
     "desired_bias_vars" = desired_bias_vars,
-    "weights_desired_hp_vars" = weights_desired_hp_vars,
-    "biases_desired_hp_vars" = biases_desired_hp_vars,
-    "target_noise_hp_vars" = target_noise_hp_vars,
+    "weights_desired_hp_vars" = weights_desired_hp_vars %>% remove_log_terms(),
+    "biases_desired_hp_vars" = biases_desired_hp_vars %>% remove_log_terms(),
+    "target_noise_hp_vars" = target_noise_hp_vars %>% remove_log_terms(),
     "df_chain_statistics" = df_samples
   )
 )
