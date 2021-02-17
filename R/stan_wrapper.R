@@ -18,9 +18,9 @@ source("R/stan_utils.R")
 
 # Load YAML ---------------------------------------------------------------
 
-# args <- commandArgs(trailingOnly = TRUE)
-# YAML_INPUTS <- yaml::read_yaml(args[1])
-YAML_INPUTS <- yaml::read_yaml("config/noncentered.yaml")
+args <- commandArgs(trailingOnly = TRUE)
+YAML_INPUTS <- yaml::read_yaml(args[1])
+# YAML_INPUTS <- yaml::read_yaml("config/noncentered.yaml")
 
 # Paths -------------------------------------------------------------------
 
@@ -43,7 +43,7 @@ SAMPLE_FROM_PRIOR <- YAML_INPUTS$SAMPLE_FROM_PRIOR
 
 INIT_FUN <- function(...) {
   
-  if(str_detect("./stan/bnns_noncentered_log.stan", "log")){
+  if(str_detect(STAN_FILE, "log")){
     list(
       log_W_prec = log(YAML_INPUTS$INIT$WEIGHTS),
       log_B_prec = log(YAML_INPUTS$INIT$BIASES),

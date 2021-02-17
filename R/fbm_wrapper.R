@@ -23,6 +23,7 @@ if(PRIOR_ONLY){
 
 # net-pred itndqQp rlog_1.net 1000:%40 rlog_2.net 1000:%40 rlog_3.net 1000:%40 rlog_4.net 1000:%40 > posterior/combined_results.txt
 # net-pred itndqQp prior_log_1.net 1000:%40 prior_log_2.net 1000:%40 prior_log_3.net 1000:%40 prior_log_4.net 1000:%40 > prior/combined_results.txt
+# net-pred itndqQp rlog_1.net 30000:%500 rlog_2.net 30000:%500 rlog_3.net 30000:%500 rlog_4.net 30000:%500 > posterior/combined_results.txt
 
 df_fbm <- data.frame(read.table(str_c(BASE_DIR, "combined_results.txt"), header = FALSE, blank.lines.skip = TRUE, skip = 5, nrows = 100)) %>% 
   janitor::clean_names() %>% 
