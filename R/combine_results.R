@@ -41,9 +41,27 @@ if(PRIOR_ONLY){
   
   # Posteriors
     
-  stan_centered_path <- "stan_2021_02_01_12_50_42" # stan_2021_01_29_20_30_44
-  stan_noncentered_path <- "stan_2021_02_01_11_18_11" # stan_2021_01_28_18_19_02
-  fbm_path <- "fbm_2021_02_01_15_49_39"  # fbm_2021_01_29_09_39_56  
+  # stan_centered_path <- "stan_2021_02_01_12_50_42" # stan_2021_01_29_20_30_44
+  # stan_noncentered_path <- "stan_2021_02_01_11_18_11" # stan_2021_01_28_18_19_02
+  # fbm_path <- "fbm_2021_02_01_15_49_39"  # fbm_2021_01_29_09_39_56  
+  
+  # Posteriors for 50k runs
+  
+  stan_centered_path <- "stan_2021_02_07_11_19_01" # stan_2021_01_29_20_30_44
+  stan_noncentered_path <- "stan_2021_02_06_21_05_16" # stan_2021_01_28_18_19_02
+  fbm_path <- "fbm_2021_02_06_10_59_33"  # fbm_2021_01_29_09_39_56
+  
+  # Posteriors for 50k runs - Log and non-centered
+  
+  stan_centered_path <- "stan_2021_02_06_21_05_16" # stan_2021_01_29_20_30_44
+  stan_noncentered_path <- "stan_2021_02_07_17_17_10" # stan_2021_01_28_18_19_02 (log parametrized)
+  fbm_path <- "fbm_2021_02_06_10_59_33"  # fbm_2021_01_29_09_39_56
+  
+  # Posteriors for 10k runs
+  
+  # stan_centered_path <- "stan_2021_02_07_14_09_41" 
+  # stan_noncentered_path <- "stan_2021_02_07_14_09_48" 
+  # fbm_path <- "fbm_2021_02_06_10_59_33" 
     
 }
 
@@ -61,8 +79,8 @@ fbm <- read_rds(str_c("./output/", fbm_path, "/outputs.rds"))
 # Extract and clean stan/hmc predictions
 
 df_preds <- stan_centered$outputs$df_predictions %>% 
-  mutate(method = "HMC: centered") %>% 
-  bind_rows(stan_noncentered$outputs$df_predictions %>% mutate(method = "HMC: non-centered")) %>% 
+  mutate(method = "HMC: non-centered") %>% 
+  bind_rows(stan_noncentered$outputs$df_predictions %>% mutate(method = "HMC: non-centered log")) %>% 
   filter(label == "test") %>% 
   group_by(method) %>% 
   mutate(case = 1:n()) %>% 
@@ -135,8 +153,8 @@ y_vs_x_means %>% save_plot("y_vs_x_predictive_mean_only")
 markov_chain_samples <- function(stan_fit,
                                  var,
                                  n_chains = 4,
-                                 burn_in = 1000,
-                                 iters = 20000) {
+                                 burn_in = 25000,
+                                 iters = 50000) {
   
   # Create empty dataframe to save results
   
@@ -191,7 +209,7 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
   stan_traces_c <- stan_traces_c %>% 
     select(t, value, chain, var) %>% 
     tidyr::pivot_wider(names_from = var, values_from = value) %>% 
-    mutate(method = "HMC: centered")
+    mutate(method = "HMC: non-centered")
   
   # Extract stan uncentered traces
   
@@ -206,7 +224,7 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
   stan_traces_nc <- stan_traces_nc %>% 
     select(t, value, chain, var) %>% 
     tidyr::pivot_wider(names_from = var, values_from = value) %>% 
-    mutate(method = "HMC: non-centered")
+    mutate(method = "HMC: non-centered log")
   
   # Create one stan_traces data frame
   
@@ -235,12 +253,12 @@ plot_traces <- function(df, title, subtext, size = 0.15, thin = TRUE, log = FALS
   
   if(thin == TRUE){
     iters <- unique(w1_traces$t)
-    keep_iters <- iters[seq(1, length(iters), 50)]
+    keep_iters <- iters[seq(1, length(iters), 100)]
   }
   
   final_plot <- ggplot(df %>% filter(t %in% keep_iters)) +
     geom_point(aes(x = t, y = value, color = factor(chain)), size=size) + 
-    geom_vline(xintercept = 1000, linetype = 2) + 
+    geom_vline(xintercept = 10000, linetype = 2) + 
     theme_bw() + 
     scale_color_manual(values = c("red3", "blue3", "green4", "grey2"), name = "chain") + 
     # scale_color_grey(start = 0.05, end = 0.10) + 
@@ -248,10 +266,12 @@ plot_traces <- function(df, title, subtext, size = 0.15, thin = TRUE, log = FALS
     ylab("") + 
     theme(text=element_text(size=20),
           legend.position = "bottom", 
-          plot.subtitle = element_text(size = 12)) + 
+          plot.subtitle = element_text(size = 12), 
+          axis.text.x = element_text(size = 10)) + 
     facet_wrap(method ~ .) + 
     ggtitle(title, subtitle = subtext) + 
-    guides(colour = guide_legend(override.aes = list(size=6)))
+    guides(colour = guide_legend(override.aes = list(size=6))) + 
+    scale_x_continuous(label = function(x){format(x, scientific = TRUE)})
   
   if(log == TRUE){
     
@@ -287,7 +307,7 @@ y_prec_traces <- join_fbm_stan_traces(fbm_var = "y_sdev", stan_var_pattern = "y_
 if(PRIOR_ONLY == F){
   SUBTEXT <- "Vertical line indicates starting point of values used as representative samples. Four chains are used for consistent comparison. \nEvery fifth sample shown."
 } else {
-  SUBTEXT <- "Four chains were used. Every fifth sample is shown."
+  SUBTEXT <- "Four chains were used. Every 100th sample is shown."
 }
 
 w1_trace_plot <- plot_traces(w1_traces, title = "Input-to-Hidden Weights", subtext = SUBTEXT)

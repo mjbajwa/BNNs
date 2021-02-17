@@ -3,7 +3,7 @@
 OUTPUT_PATH: "./output/"
 STAN_FILE: "./stan/bnns_noncentered.stan"
 INPUT_TYPE: "fbm_example"
-SAVE_PLOTS: FALSE
+SAVE_PLOTS: TRUE
 
 # Data Preprocessing
 
