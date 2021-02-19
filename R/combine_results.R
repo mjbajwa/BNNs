@@ -12,6 +12,7 @@ library(viridis)
 
 # Configure paths ---------------------------------------------------------
 
+args <- commandArgs(trailingOnly = TRUE)
 PRIOR_ONLY <- F
 OUTPUT_PATH <- "./output/"
 folder_name <- str_replace_all(Sys.time(), "-|:|\ ", "_")
@@ -47,21 +48,26 @@ if(PRIOR_ONLY){
   
   # Posteriors for 50k runs
   
-  stan_centered_path <- "stan_2021_02_07_11_19_01" # stan_2021_01_29_20_30_44
-  stan_noncentered_path <- "stan_2021_02_06_21_05_16" # stan_2021_01_28_18_19_02
-  fbm_path <- "fbm_2021_02_06_10_59_33"  # fbm_2021_01_29_09_39_56
+  # stan_centered_path <- "stan_2021_02_07_11_19_01" # stan_2021_01_29_20_30_44
+  # stan_noncentered_path <- "stan_2021_02_06_21_05_16" # stan_2021_01_28_18_19_02
+  # fbm_path <- "fbm_2021_02_06_10_59_33"  # fbm_2021_01_29_09_39_56
   
   # Posteriors for 50k runs - Log and non-centered
   
-  stan_centered_path <- "stan_2021_02_06_21_05_16" # stan_2021_01_29_20_30_44
-  stan_noncentered_path <- "stan_2021_02_07_17_17_10" # stan_2021_01_28_18_19_02 (log parametrized)
-  fbm_path <- "fbm_2021_02_06_10_59_33"  # fbm_2021_01_29_09_39_56
+  # stan_centered_path <- "stan_2021_02_06_21_05_16" # stan_2021_01_29_20_30_44
+  # stan_noncentered_path <- "stan_2021_02_07_17_17_10" # stan_2021_01_28_18_19_02 (log parametrized)
+  # fbm_path <- "fbm_2021_02_06_10_59_33"  # fbm_2021_01_29_09_39_56
   
   # Posteriors for 10k runs
   
   # stan_centered_path <- "stan_2021_02_07_14_09_41" 
   # stan_noncentered_path <- "stan_2021_02_07_14_09_48" 
   # fbm_path <- "fbm_2021_02_06_10_59_33" 
+  
+  stan_centered_path <- args[1]
+  stan_noncentered_path <- args[2]
+  fbm_path <- args[3]
+  
     
 }
 

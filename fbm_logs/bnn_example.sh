@@ -18,7 +18,7 @@ net-plt t r rlog_"$1".net
 
 printf "Gibbs sampling hyperparameters, and HMC on weights/biases \n\n";
 mc-spec rlog_"$1".net sample-sigmas heatbath hybrid 1000:10 0.4
-net-mc rlog_"$1".net 20000
+net-mc rlog_"$1".net 50000
 
 # Plot for analyzing everything is doing what it should...
 
@@ -31,7 +31,7 @@ net-mc rlog_"$1".net 20000
 mkdir -p chain_"$1"/results/
 
 printf "Writing results to disk \n\n";
-net-pred itndqQp rlog_"$1".net 19000:%10 > posterior/chain_"$1"/results/results.txt;
+net-pred itndqQp rlog_"$1".net 30000:%100 > posterior/chain_"$1"/results/results.txt;
 net-tbl tw1@ rlog_"$1".net > posterior/chain_"$1"/results/traces_w1.txt;
 net-tbl tw2@ rlog_"$1".net > posterior/chain_"$1"/results/traces_w2.txt;
 net-tbl tw3@ rlog_"$1".net > posterior/chain_"$1"/results/traces_w3.txt;
