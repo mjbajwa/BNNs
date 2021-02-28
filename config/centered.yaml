@@ -44,7 +44,7 @@ SAMPLE_FROM_PRIOR: 0 # To check for prior, set this to 1
 
 INIT:
   WEIGHTS: [1, 1]
-  BIASES: [1, 1]
+  BIASES: [1]
   TARGET_NOISE: [1]
 
 # MCMC Sampling from Stan
@@ -52,7 +52,7 @@ INIT:
 MCMC_INPUTS:
   CHAINS: 4
   CORES: 4
-  ITER: 2000
+  ITER: 10000
   BURN_IN: 1000
   CONTROL: 
     max_treedepth: 10 # Default is 10

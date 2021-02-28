@@ -52,7 +52,7 @@ INIT:
 MCMC_INPUTS:
   CHAINS: 4
   CORES: 4
-  ITER: 2000
+  ITER: 10000
   BURN_IN: 1000
   CONTROL: 
     max_treedepth: 10 # Default is 10
