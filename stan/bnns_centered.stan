@@ -62,7 +62,7 @@ parameters {
   // Standard Deviation of Weights and biases
   
   vector<lower=0>[h+1] W_prec;
-  vector<lower=0>[h+1] B_prec; // <lower=1e-6, upper=1e6>[
+  vector<lower=0>[h] B_prec; // <lower=1e-6, upper=1e6>[
   
 }
 
