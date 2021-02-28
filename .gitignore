@@ -3,6 +3,6 @@
 .RData
 .Ruserdata
 .ipynb
-
 output/DEBUG/*
 output/*
+bnn_pymc3.ipynb
