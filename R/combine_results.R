@@ -60,13 +60,13 @@ if(PRIOR_ONLY){
   
   # Posteriors for 10k runs
   
-  stan_centered_path <- "stan_2021_02_28_10_46_37"
-  stan_noncentered_path <- "stan_2021_02_28_10_46_48"
-  fbm_path <- "fbm_2021_02_27_22_09_09"
+  # stan_centered_path <- "stan_2021_02_28_12_11_12"
+  # stan_noncentered_path <- "stan_2021_02_28_12_18_03"
+  # fbm_path <- "fbm_2021_02_27_22_09_09"
   
-  # stan_centered_path <- args[1]
-  # stan_noncentered_path <- args[2]
-  # fbm_path <- args[3]
+  stan_centered_path <- args[1]
+  stan_noncentered_path <- args[2]
+  fbm_path <- args[3]
   
 }
 

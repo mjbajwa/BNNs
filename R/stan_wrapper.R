@@ -63,7 +63,7 @@ INIT_FUN <- function(...) {
   } else {
     list(
       W_prec = YAML_INPUTS$INIT$WEIGHTS,
-      B_prec = YAML_INPUTS$INIT$BIASES,
+      B_prec = as.array(YAML_INPUTS$INIT$BIASES),
       y_prec = YAML_INPUTS$INIT$TARGET_NOISE,
       W = array(0, dim = c(
         length(G) + 1, max(max(G), 1), max(max(G), 1)

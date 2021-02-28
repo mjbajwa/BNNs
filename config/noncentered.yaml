@@ -44,7 +44,7 @@ SAMPLE_FROM_PRIOR: 0 # To check for prior, set this to 1
 
 INIT:
   WEIGHTS: [1, 1]
-  BIASES: [1, 1]
+  BIASES: [1]
   TARGET_NOISE: [1]
 
 # MCMC Sampling from Stan
