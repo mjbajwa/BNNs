@@ -217,8 +217,8 @@ model {
   // The extra parameters are added for compatibility with stan data structures. 
   // Priors on these can be ignored for now (non-informative priors assumed by Stan seem to work fine)
 
-  // // Weights
-  // 
+  // Weights
+
   // for(l in 1:(h+1)){
   //   if(l == 1){
   //     for(g_in in (K+1):rows(W[l])){

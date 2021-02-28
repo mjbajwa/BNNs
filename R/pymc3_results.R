@@ -6,7 +6,10 @@ library(stringr)
 library(ggplot2)
 library(tidyr)
 
-PYMC3_PATH <- "./output/pymc3_2021_02_14_19_58_15/"
+# Centered = pymc3_2021_02_21_10_16_01
+# Non-centered = pymc3_2021_02_21_11_07_40
+
+PYMC3_PATH <- "./output/pymc3_2021_02_21_11_07_40/"
 
 # Load Data ---------------------------------------------------------------
 
@@ -75,9 +78,9 @@ var_ids <- list("W_prec_ih" = "Standard Deviation Hyperparameter: Input-to-Hidde
                 "W_prec_ho" = "Standard Deviation Hyperparameter: Hidden-to-Output Weights", 
                 "B_prec_h" = "Standard Deviation Hyperparameter: Hidden Unit Biases", 
                 "y_prec" = "Standard Deviation Hyperparameter: Target Noise", 
-                "w_ih" = "Input-to-Hidden Weights", 
-                "w_ho" = "Hidden Unit Biases", 
-                "b_h" = "Hidden-to-Output Unit Weights", 
+                "w_ih_raw" = "Input-to-Hidden Weights", 
+                "w_ho_raw" = "Hidden Unit Biases", 
+                "b_h_raw" = "Hidden-to-Output Unit Weights", 
                 "b_o" = "Output Unit Biases")
 
 trace_plots <- list()
@@ -97,12 +100,32 @@ for(var_id in names(var_ids)){
   if(str_detect(var_id, "prec")){
     df_subset <- df_subset %>% mutate(value = 1/sqrt(value))
   }
-  
-  if(str_detect(var_id, "W_prec_ho")){
-    df_subset <- df_subset %>% mutate(value = value * 1/sqrt(8))
-    
-  }
+   
+  # if(str_detect(var_id, "W_prec_ho")){
+  #   df_subset <- df_subset %>% mutate(value = value * 1/sqrt(8))
+  # 
+  # }
   
   trace_plots[[var_id]] <- plot_traces(df_subset, var_id, title = var_ids[var_id], subtext = "")
+  
+}
+
+# Save all results to disk ------------------------------------------------
+
+ggsave(
+  str_c(PYMC3_PATH, "/predicted_vs_actual.png"),
+  y_vs_x_plot,
+  width = 11,
+  height = 8
+)
+
+for(i in 1:length(trace_plots)){
+  
+  ggsave(
+    str_c(PYMC3_PATH, "/", names(trace_plots)[i], ".png"),
+    trace_plots[[1]],
+    width = 11,
+    height = 8
+  )
   
 }

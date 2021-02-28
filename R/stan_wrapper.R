@@ -34,41 +34,49 @@ TRAIN_FRACTION <- YAML_INPUTS$TRAIN_FRACTION
 # Architecture Design
 
 G <- YAML_INPUTS$G
-INFINITE_LIMIT <- YAML_INPUTS$INFINITE_LIMIT 
+INFINITE_LIMIT <- YAML_INPUTS$INFINITE_LIMIT
 HIERARCHICAL_FLAG_W <- YAML_INPUTS$HIERARCHICAL_FLAG_W
 HIERARCHICAL_FLAG_B <- YAML_INPUTS$HIERARCHICAL_FLAG_B
 FIX_TARGET_NOISE <- YAML_INPUTS$FIX_TARGET_NOISE
 SAMPLE_FROM_PRIOR <- YAML_INPUTS$SAMPLE_FROM_PRIOR
 
 INIT_FUN <- function(...) {
-  
-  if(str_detect(YAML_INPUTS$STAN_FILE, "log")){
+  if (str_detect(YAML_INPUTS$STAN_FILE, "log")) {
     list(
       log_W_prec = log(YAML_INPUTS$INIT$WEIGHTS),
       log_B_prec = log(YAML_INPUTS$INIT$BIASES),
-      log_y_prec = log(YAML_INPUTS$INIT$TARGET_NOISE), 
-      # W_prec = YAML_INPUTS$INIT$WEIGHTS,
-      # B_prec = YAML_INPUTS$INIT$BIASES,
-      # y_prec = YAML_INPUTS$INIT$TARGET_NOISE,
-      W = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-      B = array(0, dim = c(max(max(G), 1), length(G) + 1)),
-      W_raw = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-      B_raw = array(0, dim = c(max(max(G), 1), length(G) + 1))
+      log_y_prec = log(YAML_INPUTS$INIT$TARGET_NOISE),
+      W = array(0, dim = c(
+        length(G) + 1, max(max(G), 1), max(max(G), 1)
+      )),
+      B = array(0, dim = c(max(max(
+        G
+      ), 1), length(G) + 1)),
+      W_raw = array(0, dim = c(
+        length(G) + 1, max(max(G), 1), max(max(G), 1)
+      )),
+      B_raw = array(0, dim = c(max(max(
+        G
+      ), 1), length(G) + 1))
     )
-  
-  } else {
     
+  } else {
     list(
-      # log_W_prec = log(YAML_INPUTS$INIT$WEIGHTS),
-      # log_B_prec = log(YAML_INPUTS$INIT$BIASES),
-      # log_y_prec = log(YAML_INPUTS$INIT$TARGET_NOISE), 
       W_prec = YAML_INPUTS$INIT$WEIGHTS,
       B_prec = YAML_INPUTS$INIT$BIASES,
       y_prec = YAML_INPUTS$INIT$TARGET_NOISE,
-      W = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-      B = array(0, dim = c(max(max(G), 1), length(G) + 1)),
-      W_raw = array(0, dim = c(length(G) + 1, max(max(G), 1), max(max(G), 1))),
-      B_raw = array(0, dim = c(max(max(G), 1), length(G) + 1))
+      W = array(0, dim = c(
+        length(G) + 1, max(max(G), 1), max(max(G), 1)
+      )),
+      B = array(0, dim = c(max(max(
+        G
+      ), 1), length(G) + 1)),
+      W_raw = array(0, dim = c(
+        length(G) + 1, max(max(G), 1), max(max(G), 1)
+      )),
+      B_raw = array(0, dim = c(max(max(
+        G
+      ), 1), length(G) + 1))
     )
     
     
@@ -88,8 +96,10 @@ FBM_B <- list(
   "GAMMA_ALPHA" = YAML_INPUTS$PRIORS$BIASES$ALPHA
 )
 
-FBM_Y <- list("GAMMA_WIDTH" = YAML_INPUTS$PRIORS$TARGET$WIDTH,
-              "GAMMA_ALPHA" = YAML_INPUTS$PRIORS$TARGET$ALPHA)
+FBM_Y <- list(
+  "GAMMA_WIDTH" = YAML_INPUTS$PRIORS$TARGET$WIDTH,
+  "GAMMA_ALPHA" = YAML_INPUTS$PRIORS$TARGET$ALPHA
+)
 
 # MCMC control for stan
 
@@ -102,6 +112,7 @@ path <- str_c(OUTPUT_PATH, "stan_", folder_name)
 dir.create(path)
 
 INPUTS <- list(
+  "STAN_FILE" = STAN_FILE,
   "G" = G,
   "INFINITE_LIMIT" = INFINITE_LIMIT,
   "HIERARCHICAL_FLAG_W" = HIERARCHICAL_FLAG_W,
@@ -113,7 +124,7 @@ INPUTS <- list(
   "SCALE_INPUT" = SCALE_INPUT,
   "TRAIN_FRACTION" = TRAIN_FRACTION,
   "INIT_VALUES" = INIT_FUN(),
-  "FIX_TARGET_NOISE" = FIX_TARGET_NOISE, 
+  "FIX_TARGET_NOISE" = FIX_TARGET_NOISE,
   "SAMPLE_FROM_PRIOR" = SAMPLE_FROM_PRIOR
 )
 
@@ -123,15 +134,18 @@ capture.output(c(INPUTS, MCMC_INPUTS), file = str_c(path, '/inputs.txt'))
 
 # Shape = alpha, Scale = beta
 
-W_STAN <- fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH, FBM_W$GAMMA_ALPHA)
+W_STAN <-
+  fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH, FBM_W$GAMMA_ALPHA)
 W_gamma_shape <- W_STAN$STAN_ALPHA
 W_gamma_scale <- W_STAN$STAN_BETA
 
-B_STAN <- fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
+B_STAN <-
+  fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
 B_gamma_shape <- B_STAN$STAN_ALPHA
 B_gamma_scale <- B_STAN$STAN_BETA
 
-Y_STAN <- fbm_gamma_params_to_stan(FBM_Y$GAMMA_WIDTH, FBM_Y$GAMMA_ALPHA)
+Y_STAN <-
+  fbm_gamma_params_to_stan(FBM_Y$GAMMA_WIDTH, FBM_Y$GAMMA_ALPHA)
 Y_gamma_shape <- Y_STAN$STAN_ALPHA
 Y_gamma_scale <- Y_STAN$STAN_BETA
 
@@ -140,7 +154,7 @@ Y_gamma_scale <- Y_STAN$STAN_BETA
 # precision_w <- rgamma(n = 1000, shape = W_gamma_shape[1], scale = 1 / W_gamma_scale[1])
 # precision_b <- rgamma(n = 1000, shape = B_gamma_shape[1], scale = 1 / B_gamma_scale[1])
 # precision_y <- rgamma(n = 1000, shape = Y_gamma_shape[1], scale = 1 / Y_gamma_scale[1])
-# 
+#
 # # par(mfrow = c(3, 1))
 # # hist(log10(1 / sqrt(precision_w)), col = "red2", main = "Weights (log10 sdev)")
 # # hist(log10(1 / sqrt(precision_b)), col = "red2", main = "Biases (log10 sdev)")
@@ -161,10 +175,14 @@ target_col <- "Y"
 
 # Data pre-processing
 
-X_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(-contains("Y"))
-y_train <- df %>% as_tibble() %>% slice(train_idx) %>% select(contains("Y")) %>% pull()
-X_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(-contains("Y"))
-y_test <- df %>% as_tibble() %>% slice(-train_idx) %>% select(contains("Y")) %>% pull()
+X_train <-
+  df %>% as_tibble() %>% slice(train_idx) %>% select(-contains("Y"))
+y_train <-
+  df %>% as_tibble() %>% slice(train_idx) %>% select(contains("Y")) %>% pull()
+X_test <-
+  df %>% as_tibble() %>% slice(-train_idx) %>% select(-contains("Y"))
+y_test <-
+  df %>% as_tibble() %>% slice(-train_idx) %>% select(contains("Y")) %>% pull()
 N <- nrow(X_train) # number of observations in training data
 K <- ncol(X_train) # number of input features
 N_test <- nrow(X_test) # number of observations in test data
@@ -202,9 +220,9 @@ fit <- stan(
   iter = MCMC_INPUTS$ITER,
   cores = MCMC_INPUTS$CORES,
   verbose = FALSE,
-  refresh = 100,
-  seed = 42, # set to 42 for all previous results (date < Feb-04).
-  algorithm = "NUTS",
+  refresh = 10,
+  seed = 42,
+  # set to 42 for all previous results (date < Feb-04).
   control = MCMC_INPUTS$CONTROL
 )
 
@@ -212,7 +230,8 @@ fit <- stan(
 
 # Extract summary table from the fit object
 
-stan_summary <- summary(fit, probs = c(0.01, 0.025, 0.10, 0.25, 0.50, 0.75, 0.90, 0.975, 0.99))
+stan_summary <-
+  summary(fit, probs = c(0.01, 0.025, 0.10, 0.25, 0.50, 0.75, 0.90, 0.975, 0.99))
 all_parameters <- attr(stan_summary$summary, "dimnames")[[1]]
 df_stan_summary <- stan_summary$summary %>%
   as_tibble() %>%
@@ -220,24 +239,31 @@ df_stan_summary <- stan_summary$summary %>%
 
 # Weight Parameter Names
 
-hidden_weights_names <- all_parameters[stringr::str_detect(all_parameters, "W") & 
-                                         !stringr::str_detect(all_parameters, "W_gamma|W_sdev|W_prec")]
+hidden_weights_names <-
+  all_parameters[stringr::str_detect(all_parameters, "W") &
+                   !stringr::str_detect(all_parameters, "W_gamma|W_sdev|W_prec")]
 
 # Biases Parameter Names
 
-hidden_biases_names <- all_parameters[stringr::str_detect(all_parameters, "B") & 
-                                        !stringr::str_detect(all_parameters, "B_gamma|B_sdev|B_prec")]
+hidden_biases_names <-
+  all_parameters[stringr::str_detect(all_parameters, "B") &
+                   !stringr::str_detect(all_parameters, "B_gamma|B_sdev|B_prec")]
 
 # Weight Standard Deviation (names)
 
-W_precision_names <- all_parameters[stringr::str_detect(all_parameters, "W_prec")]
-B_precision_names <- all_parameters[stringr::str_detect(all_parameters, "B_prec")]
+W_precision_names <-
+  all_parameters[stringr::str_detect(all_parameters, "W_prec")]
+B_precision_names <-
+  all_parameters[stringr::str_detect(all_parameters, "B_prec")]
 
 # predicted values of test set
 
-y_train_names <- all_parameters[str_detect(all_parameters, "y_train_pred_final")]
-y_test_names <- all_parameters[str_detect(all_parameters, "y_test_pred")]
-y_precision_names <- all_parameters[str_detect(all_parameters, "y_prec")]
+y_train_names <-
+  all_parameters[str_detect(all_parameters, "y_train_pred_final")]
+y_test_names <-
+  all_parameters[str_detect(all_parameters, "y_test_pred")]
+y_precision_names <-
+  all_parameters[str_detect(all_parameters, "y_prec")]
 
 # Prediction of training and test set ----------------------------------------------------
 
@@ -283,7 +309,7 @@ pred_actual_plot <- ggplot(df_post_preds) +
   ggtitle("Predicted vs. Actual")
 
 yx_unfiltered_plot <-
-  ggplot(df_post_preds) + 
+  ggplot(df_post_preds) +
   geom_ribbon(aes(
     x = X_V1,
     ymin = `2.5%`,
@@ -317,9 +343,12 @@ yx_unfiltered_plot <-
 # Trace Plot Analysis of MCMC for weights/biases ---------------------------------------------
 
 weights_parsed <- parse_stan_vars(hidden_weights_names, "W", 3)
-W_precision_parsed <- parse_stan_vars(W_precision_names, "W_prec", 1, column_names = c("layer"))
-biases_parsed <- parse_stan_vars(hidden_biases_names, "B", 2, column_names = c("neuron", "layer"))
-B_precision_parsed <- parse_stan_vars(B_precision_names, "B_prec", 1, column_names = c("layer"))
+W_precision_parsed <-
+  parse_stan_vars(W_precision_names, "W_prec", 1, column_names = c("layer"))
+biases_parsed <-
+  parse_stan_vars(hidden_biases_names, "B", 2, column_names = c("neuron", "layer"))
+B_precision_parsed <-
+  parse_stan_vars(B_precision_names, "B_prec", 1, column_names = c("layer"))
 
 # Weights analysis
 
@@ -335,7 +364,7 @@ df_weights_hp_posterior <- W_precision_parsed %>%
 df_biases_hp_posterior <- B_precision_parsed %>%
   left_join(df_stan_summary, by = "stan_var_name")
 
-df_noise_hp_posterior <- df_stan_summary %>% 
+df_noise_hp_posterior <- df_stan_summary %>%
   filter(str_detect(stan_var_name, "y_prec"))
 
 # Parse out important weight and bias parameters (that are not redundant)
@@ -367,7 +396,7 @@ for (l in 1:(length(G) + 1)) {
       incoming_neuron %in% previous_hidden_units,
       outgoing_neuron %in% next_hidden_units
     ) %>%
-    filter(!str_detect(stan_var_name, "raw")) %>% 
+    filter(!str_detect(stan_var_name, "raw")) %>%
     pull(stan_var_name)
   
   desired_weight_vars <- c(desired_weight_vars, layer_weights)
@@ -377,7 +406,6 @@ for (l in 1:(length(G) + 1)) {
 desired_bias_vars <- c()
 
 for (l in 1:(length(G) + 1)) {
-  
   if (l == length(G) + 1) {
     next_hidden_units = 1
   } else {
@@ -387,11 +415,9 @@ for (l in 1:(length(G) + 1)) {
   # Define weights of layers
   
   layer_weights <- df_biases_posterior %>%
-    filter(
-      layer == l,
-      neuron %in% next_hidden_units,
-    ) %>%
-    filter(!str_detect(stan_var_name, "raw")) %>% 
+    filter(layer == l,
+           neuron %in% next_hidden_units,) %>%
+    filter(!str_detect(stan_var_name, "raw")) %>%
     pull(stan_var_name)
   
   desired_bias_vars <- c(desired_bias_vars, layer_weights)
@@ -405,7 +431,6 @@ for (l in 1:(length(G) + 1)) {
 weight_trace_plots <- list()
 
 for (i in 1:length(desired_weight_vars)) {
-  
   var <- desired_weight_vars[i]
   
   weight_trace_plots[[var]] <- markov_chain_samples(fit,
@@ -423,13 +448,12 @@ weights_desired_hp_vars <- df_weights_hp_posterior$stan_var_name
 weights_hp_trace_plots <- list()
 
 for (i in 1:length(weights_desired_hp_vars)) {
-  
   var <- weights_desired_hp_vars[i]
   
   weights_hp_trace_plots[[var]] <- markov_chain_samples(fit,
-                                                         var,
-                                                         burn_in = MCMC_INPUTS$BURN_IN,
-                                                         iters = MCMC_INPUTS$ITER) %>%
+                                                        var,
+                                                        burn_in = MCMC_INPUTS$BURN_IN,
+                                                        iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN, min_time = 1)
   
 }
@@ -439,7 +463,6 @@ for (i in 1:length(weights_desired_hp_vars)) {
 bias_trace_plots <- list()
 
 for (i in 1:length(desired_bias_vars)) {
-  
   var <- desired_bias_vars[i]
   
   bias_trace_plots[[var]] <- markov_chain_samples(fit,
@@ -447,7 +470,7 @@ for (i in 1:length(desired_bias_vars)) {
                                                   burn_in = MCMC_INPUTS$BURN_IN,
                                                   iters = MCMC_INPUTS$ITER) %>%
     mcmc_trace_plot(var, burn_in = MCMC_INPUTS$BURN_IN)
-
+  
 }
 
 # Bias Hyperparameters
@@ -456,7 +479,6 @@ biases_desired_hp_vars <- df_biases_hp_posterior$stan_var_name
 biases_hp_trace_plots <- list()
 
 for (i in 1:length(biases_desired_hp_vars)) {
-  
   var <- biases_desired_hp_vars[i]
   
   biases_hp_trace_plots[[var]] <- markov_chain_samples(fit,
@@ -473,7 +495,6 @@ target_noise_hp_vars <- df_noise_hp_posterior$stan_var_name
 target_noise_trace_plots <- list()
 
 for (i in 1:length(target_noise_hp_vars)) {
-  
   var <- target_noise_hp_vars[i]
   
   target_noise_trace_plots[[var]] <- markov_chain_samples(fit,
@@ -538,18 +559,18 @@ for (chain in 1:length(sampler_params)) {
   
 }
 
-stepsize_plots <- ggplot(df_samples %>% filter(iter %in% 100:MCMC_INPUTS$ITER)) +
+stepsize_plots <-
+  ggplot(df_samples %>% filter(iter %in% 100:MCMC_INPUTS$ITER)) +
   geom_line(aes(x = iter, y = stepsize__, color = chain),
             alpha = 0.8) +
   theme_bw() +
-  facet_wrap(chain ~ ., scales = "free") + 
-  xlab("Iteration") + 
+  facet_wrap(chain ~ ., scales = "free") +
+  xlab("Iteration") +
   ylab("Step Size")
 
 # Save Results ------------------------------------------------------------
 
-if(YAML_INPUTS$SAVE_PLOTS){
-  
+if (YAML_INPUTS$SAVE_PLOTS) {
   # Prediction Plots
   
   ggsave(
@@ -642,13 +663,12 @@ if(YAML_INPUTS$SAVE_PLOTS){
     width = 11,
     height = 8
   )
-
+  
 }
 
 # Return Object -----------------------------------------------------------
 
 outputs <- list(
-  
   "stan_file" = STAN_FILE,
   "inputs" = INPUTS,
   "outputs" = list(

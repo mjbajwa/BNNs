@@ -110,7 +110,7 @@ transformed parameters {
           if(infinite_limit[l-1] == 1){
             W[l][g_in, 1] = sqrt(1.0/G[l-1]) * 1/sqrt(W_prec[l]) * W_raw[l][g_in, 1]; 
           } else {
-            W[l][g_in, 1] = 1/sqrt(W_prec[l]) * W[l][g_in, 1];
+            W[l][g_in, 1] = 1/sqrt(W_prec[l]) * W_raw[l][g_in, 1];
           }
         } else {
             W[l][g_in, 1] = 100 * W_raw[l][g_in, 1];
@@ -157,8 +157,8 @@ transformed parameters {
   // The extra parameters are added for compatibility with stan data structures. 
   // Priors on these can be ignored for now (non-informative priors assumed by Stan seem to work fine)
 
-  // Weights
-
+  // // Weights
+  // 
   // for(l in 1:(h+1)){
   //   if(l == 1){
   //     for(g_in in (K+1):rows(W[l])){
@@ -178,21 +178,21 @@ transformed parameters {
   //     }
   //   }
   // }
-// 
-//   // Intercepts
-// 
-//   for(l in 1:(h+1)){
-//     if (l == h+1){
-//       for(g in 2:rows(B)){
-//         B[g, l] = 100 * B_raw[g, l];
-//       }
-//     } else {
-//       // For all other layers, index only on useful weights
-//       for(g in (G[l]+1):rows(B)) {
-//         B[g, l] = 100 * B_raw[g, l];
-//       }
-//     }
-//   }
+  // 
+  // // Intercepts
+  // 
+  // for(l in 1:(h+1)){
+  //   if (l == h+1){
+  //     for(g in 2:rows(B)){
+  //       B[g, l] = 100 * B_raw[g, l];
+  //     }
+  //   } else {
+  //     // For all other layers, index only on useful weights
+  //     for(g in (G[l]+1):rows(B)) {
+  //       B[g, l] = 100 * B_raw[g, l];
+  //     }
+  //   }
+  // }
   
   // ****** Forward Pass of Neural Network ******
 
@@ -317,8 +317,8 @@ model {
   // The extra parameters are added for compatibility with stan data structures. 
   // Priors on these can be ignored for now (non-informative priors assumed by Stan seem to work fine)
 
-  // Weights
-
+  // // Weights
+  // 
   // for(l in 1:(h+1)){
   //   if(l == 1){
   //     for(g_in in (K+1):rows(W[l])){

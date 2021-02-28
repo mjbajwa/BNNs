@@ -60,15 +60,14 @@ if(PRIOR_ONLY){
   
   # Posteriors for 10k runs
   
-  # stan_centered_path <- "stan_2021_02_07_14_09_41" 
-  # stan_noncentered_path <- "stan_2021_02_07_14_09_48" 
-  # fbm_path <- "fbm_2021_02_06_10_59_33" 
+  stan_centered_path <- "stan_2021_02_28_10_46_37"
+  stan_noncentered_path <- "stan_2021_02_28_10_46_48"
+  fbm_path <- "fbm_2021_02_27_22_09_09"
   
-  stan_centered_path <- args[1]
-  stan_noncentered_path <- args[2]
-  fbm_path <- args[3]
+  # stan_centered_path <- args[1]
+  # stan_noncentered_path <- args[2]
+  # fbm_path <- args[3]
   
-    
 }
 
 capture.output(list("centered" = stan_centered_path, 
@@ -85,8 +84,8 @@ fbm <- read_rds(str_c("./output/", fbm_path, "/outputs.rds"))
 # Extract and clean stan/hmc predictions
 
 df_preds <- stan_centered$outputs$df_predictions %>% 
-  mutate(method = "HMC: non-centered") %>% 
-  bind_rows(stan_noncentered$outputs$df_predictions %>% mutate(method = "HMC: non-centered log")) %>% 
+  mutate(method = "HMC: centered") %>% 
+  bind_rows(stan_noncentered$outputs$df_predictions %>% mutate(method = "HMC: non-centered")) %>% 
   filter(label == "test") %>% 
   group_by(method) %>% 
   mutate(case = 1:n()) %>% 
@@ -215,7 +214,7 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
   stan_traces_c <- stan_traces_c %>% 
     select(t, value, chain, var) %>% 
     tidyr::pivot_wider(names_from = var, values_from = value) %>% 
-    mutate(method = "HMC: non-centered")
+    mutate(method = "HMC: centered")
   
   # Extract stan uncentered traces
   
@@ -230,7 +229,7 @@ join_fbm_stan_traces <- function(fbm_var, stan_var_pattern = "W\\[1", chosen_cha
   stan_traces_nc <- stan_traces_nc %>% 
     select(t, value, chain, var) %>% 
     tidyr::pivot_wider(names_from = var, values_from = value) %>% 
-    mutate(method = "HMC: non-centered log")
+    mutate(method = "HMC: non-centered")
   
   # Create one stan_traces data frame
   
@@ -259,12 +258,12 @@ plot_traces <- function(df, title, subtext, size = 0.15, thin = TRUE, log = FALS
   
   if(thin == TRUE){
     iters <- unique(w1_traces$t)
-    keep_iters <- iters[seq(1, length(iters), 100)]
+    keep_iters <- iters[seq(1, length(iters), 1)]
   }
   
   final_plot <- ggplot(df %>% filter(t %in% keep_iters)) +
     geom_point(aes(x = t, y = value, color = factor(chain)), size=size) + 
-    geom_vline(xintercept = 10000, linetype = 2) + 
+    geom_vline(xintercept = 1000, linetype = 2) + 
     theme_bw() + 
     scale_color_manual(values = c("red3", "blue3", "green4", "grey2"), name = "chain") + 
     # scale_color_grey(start = 0.05, end = 0.10) + 
