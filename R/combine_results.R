@@ -60,7 +60,7 @@ if(PRIOR_ONLY){
   
   # Posteriors for 10k runs
   
-  # stan_centered_path <- "stan_2021_02_28_12_11_12"
+  # stan_centered_path <- "stan_2021_02_28_14_02_16"
   # stan_noncentered_path <- "stan_2021_02_28_12_18_03"
   # fbm_path <- "fbm_2021_02_27_22_09_09"
   
@@ -258,7 +258,7 @@ plot_traces <- function(df, title, subtext, size = 0.15, thin = TRUE, log = FALS
   
   if(thin == TRUE){
     iters <- unique(w1_traces$t)
-    keep_iters <- iters[seq(1, length(iters), 1)]
+    keep_iters <- iters[seq(1, length(iters), 100)]
   }
   
   final_plot <- ggplot(df %>% filter(t %in% keep_iters)) +
