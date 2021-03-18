@@ -18,7 +18,7 @@ net-plt t r rlog_"$1".net
 
 printf "Gibbs sampling hyperparameters, and HMC on weights/biases \n\n";
 mc-spec rlog_"$1".net sample-sigmas heatbath hybrid 1000:10 0.4
-net-mc rlog_"$1".net 2000
+net-mc rlog_"$1".net 20000
 
 # Plot for analyzing everything is doing what it should...
 
