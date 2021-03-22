@@ -6,12 +6,22 @@ library(stringr)
 library(ggplot2)
 library(tidyr)
 library(readr)
+library(gridExtra)
 
 # User Inputs ------------------------------------------------------------
 
-METHOD <- "TF Probability"
-python_path <- "tfprob_2021_03_05_09_28_43" # tfprob_2021_03_04_18_38_58 
-fbm_path <- "fbm_2021_02_27_22_09_09"
+METHOD <- "NumPyro"
+python_path <- "numpyro_nc_2021_03_22_13_10_12" #  numpyro_nc_2021_03_19_11_33_38 numpyro_c_2021_03_21_15_46_28
+fbm_path <- "fbm_2021_03_19_07_55_29"
+
+# 500k runs
+
+# numpyro_nc_2021_03_19_09_08_57
+# fbm_2021_03_19_07_55_29
+
+# 500k
+
+numpyro_nc_2021_03_22_13_10_12
 
 # Output path generation ------------------------------------------------
 
@@ -40,7 +50,7 @@ df_preds_fbm <- fbm$outputs$df_predictions %>%
   select(inputs, targets, mean, median, q1, q10, q90, q99, method) %>% 
   mutate(label = "test")
 
-# Load Data ---------------------------------------------------------------
+# Load Results ---------------------------------------------------------------
 
 df_preds <- arrow::read_feather(str_c(python_path, "/df_predictions.feather"))
 df_traces <- arrow::read_feather(str_c(python_path, "/df_traces.feather"))
@@ -75,8 +85,8 @@ y_vs_x_plot <- ggplot(df_preds %>% filter(label == "test")) +
 plot_traces <- function(df, title, subtext, size = 0.15, thin = TRUE, log = FALSE){
   
   if(thin == TRUE){
-    iters <- unique(w1_traces$t)
-    keep_iters <- iters[seq(1, length(iters), 5)]
+    iters <- unique(df$t)
+    keep_iters <- iters[seq(1, length(iters), 100)]
   }
   
   final_plot <- ggplot(df %>% filter(t %in% keep_iters)) +
@@ -158,7 +168,6 @@ hb1_traces <- join_fbm_other_traces(fbm_var = "h2", other_var = "B_prec_h", sdev
 hw2_traces <- join_fbm_other_traces(fbm_var = "h3", other_var = "W_prec_ho", sdev_conversion = T)
 y_prec_traces <- join_fbm_other_traces(fbm_var = "y_sdev", other_var = "y_prec", sdev_conversion = T)
 
-
 w1_trace_plot <- plot_traces(w1_traces, title = "Input-to-Hidden Weights", subtext = SUBTEXT)
 b1_trace_plot <- plot_traces(b1_traces, title = "Hidden Unit Biases", subtext = SUBTEXT)
 w2_trace_plot <- plot_traces(w2_traces, title = "Hidden-to-Output Unit Weights", subtext = SUBTEXT)
@@ -176,7 +185,7 @@ hw2_trace_plot <- plot_traces(hw2_traces,
 y_prec_trace_plot <- plot_traces(y_prec_traces, 
                                  title = "Standard Deviation Hyperparameter: Target Noise", 
                                  subtext = SUBTEXT, 
-                                 size = 1, log = T)
+                                 size = 0.5, log = T)
 
 # Save all results to disk ------------------------------------------------
 
@@ -205,4 +214,25 @@ hb1_trace_plot %>% save_plot("hidden_bias_precision")
 hw2_trace_plot %>% save_plot("hidden_to_output_precision")
 y_prec_trace_plot %>% save_plot("target_noise_precision")
 
+# Append to one PDF ---------------------------------------------------------
+
+all_plots <- list(
+  y_vs_x_plot,
+  y_prec_trace_plot,
+  hw1_trace_plot,
+  hw2_trace_plot,
+  hb1_trace_plot,
+  w1_trace_plot,
+  b1_trace_plot,
+  w2_trace_plot,
+  b2_trace_plot
+)
+
+ggsave(
+  filename = str_c(path, "/", folder_name, "_combined_results.pdf"), 
+  plot = marrangeGrob(all_plots, nrow=1, ncol=1), 
+  width = 15, height = 9
+)
+
 print(path)
+
