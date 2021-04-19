@@ -7,11 +7,11 @@ library(ggplot2)
 library(tidyr)
 library(readr)
 library(gridExtra)
-
+  
 # User Inputs ------------------------------------------------------------
 
-METHOD <- "NumPyro"
-python_path <- "numpyro_nc_2021_03_22_13_10_12" #  numpyro_nc_2021_03_19_11_33_38 numpyro_c_2021_03_21_15_46_28
+METHOD <- "NumPyro (Gibbs-HMC)"
+python_path <- "numpyro_c_2021_04_02_12_23_28" #  numpyro_nc_2021_03_19_11_33_38 numpyro_c_2021_03_21_15_46_28
 fbm_path <- "fbm_2021_03_19_07_55_29"
 
 # 500k runs
@@ -21,7 +21,7 @@ fbm_path <- "fbm_2021_03_19_07_55_29"
 
 # 500k
 
-numpyro_nc_2021_03_22_13_10_12
+# numpyro_nc_2021_03_22_13_10_12
 
 # Output path generation ------------------------------------------------
 
@@ -101,7 +101,7 @@ plot_traces <- function(df, title, subtext, size = 0.15, thin = TRUE, log = FALS
           legend.position = "bottom", 
           plot.subtitle = element_text(size = 12), 
           axis.text.x = element_text(size = 10)) + 
-    facet_wrap(method ~ .) + 
+    facet_wrap(method ~ ., scales = "free_x") + 
     ggtitle(title, subtitle = subtext) + 
     guides(colour = guide_legend(override.aes = list(size=6))) + 
     scale_x_continuous(label = function(x){format(x, scientific = TRUE)})

@@ -61,6 +61,7 @@ INIT_FUN <- function(...) {
     )
     
   } else {
+    
     list(
       W_prec = YAML_INPUTS$INIT$WEIGHTS,
       B_prec = as.array(YAML_INPUTS$INIT$BIASES),
@@ -134,18 +135,20 @@ capture.output(c(INPUTS, MCMC_INPUTS), file = str_c(path, '/inputs.txt'))
 
 # Shape = alpha, Scale = beta
 
-W_STAN <-
-  fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH, FBM_W$GAMMA_ALPHA)
+W_STAN <- fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH, FBM_W$GAMMA_ALPHA)
 W_gamma_shape <- W_STAN$STAN_ALPHA
 W_gamma_scale <- W_STAN$STAN_BETA
+
+# TODO: Make this more elegant. Updating the priors. 
+
+W_gamma_scale[[2]] <- fbm_gamma_params_to_stan(FBM_W$GAMMA_WIDTH[[2]], FBM_W$GAMMA_ALPHA[[2]], 8)$STAN_BETA
 
 B_STAN <-
   fbm_gamma_params_to_stan(FBM_B$GAMMA_WIDTH, FBM_B$GAMMA_ALPHA)
 B_gamma_shape <- B_STAN$STAN_ALPHA
 B_gamma_scale <- B_STAN$STAN_BETA
 
-Y_STAN <-
-  fbm_gamma_params_to_stan(FBM_Y$GAMMA_WIDTH, FBM_Y$GAMMA_ALPHA)
+Y_STAN <- fbm_gamma_params_to_stan(FBM_Y$GAMMA_WIDTH, FBM_Y$GAMMA_ALPHA)
 Y_gamma_shape <- Y_STAN$STAN_ALPHA
 Y_gamma_scale <- Y_STAN$STAN_BETA
 

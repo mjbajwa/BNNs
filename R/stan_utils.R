@@ -26,11 +26,24 @@ read_input_data <- function(input_type = "fbm_example|power_plant") {
 }
 
 
-fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha) {
+fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha, N = 1) {
   
   # TODO: check with Prof Neal this re-parametrization is correct.
   
-  mean_precision = 1 / (fbm_width ^ 2)
+  # if(is.null(N)){
+  #   mean_precision = 1 / (fbm_width ^ 2)
+  # } else if(fbm_alpha < 2 & !is.null(N)) {
+  #   mean_precision = (N^(2/fbm_alpha)) * 1 / (fbm_width ^ 2)
+  # } else if (fbm_alpha == 2 & !is.null(N)) {
+  #   mean_precision = (N * log(N) / (fbm_width ^ 2))
+  # } else if (fbm_alpha > 2 & !is.null(N)) {
+  #   mean_precision = (N * (fbm_alpha / fbm_alpha - 2)) / (fbm_width ^ 2)
+  # }
+  
+  mean_precision = (N) / (fbm_width^2)
+  
+  # Convert to Stan parametrization
+  
   stan_alpha = fbm_alpha / 2
   stan_beta = stan_alpha / mean_precision
   

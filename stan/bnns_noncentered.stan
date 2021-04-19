@@ -32,7 +32,7 @@ data {
 
   // Flag for scaling sdev by number of hidden units in the layer (per Neal 1995) for convergence
   
-  int<lower=0, upper=1> infinite_limit[h];
+  // int<lower=0, upper=1> infinite_limit[h];
   
   // Flag for fixing target noise. If fix_target_noise = 1, then standard deviation for likelihood is 0.1
   
@@ -107,11 +107,7 @@ transformed parameters {
       
       for(g_in in 1:G[l-1]) {
         if(use_hierarchical_w == 1){
-          if(infinite_limit[l-1] == 1){
-            W[l][g_in, 1] = sqrt(1.0/G[l-1]) * 1/sqrt(W_prec[l]) * W_raw[l][g_in, 1]; 
-          } else {
             W[l][g_in, 1] = 1/sqrt(W_prec[l]) * W_raw[l][g_in, 1];
-          }
         } else {
             W[l][g_in, 1] = 100 * W_raw[l][g_in, 1];
           }
@@ -124,12 +120,8 @@ transformed parameters {
       for(g_in in 1:G[l-1]) {
         for(g_out in 1:G[l]){
           if(use_hierarchical_w == 1){
-            if(infinite_limit[l] == 1){
-              W[l][g_in, g_out] = sqrt(1.0/G[l]) * 1/sqrt(W_prec[l]) * W_raw[l][g_in, g_out]; 
-            } else {
-              W[l][g_in, g_out] = 1/sqrt(W_prec[l]) * W_raw[l][g_in, g_out]; 
-            }
-        } else {
+            W[l][g_in, g_out] = 1/sqrt(W_prec[l]) * W_raw[l][g_in, g_out]; 
+          } else {
            W[l][g_in, g_out] = 100 * W_raw[l][g_in, g_out];
           }
         }

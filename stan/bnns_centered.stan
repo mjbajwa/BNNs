@@ -157,15 +157,11 @@ model {
       
       for(g_in in 1:G[l-1]) {
         if(use_hierarchical_w == 1){
-          if(infinite_limit[l-1] == 1){
-            W[l][g_in, 1] ~ normal(0, sqrt(1.0/G[l-1]) * 1/sqrt(W_prec[l])); 
-          } else {
-            W[l][g_in, 1] ~ normal(0, 1/sqrt(W_prec[l]));
-          }
+          W[l][g_in, 1] ~ normal(0, 1/sqrt(W_prec[l]));
         } else {
-             W[l][g_in, 1] ~ normal(0, 100);
-          }
+          W[l][g_in, 1] ~ normal(0, 100);
         }
+      }
     } 
     
     // Hidden layers not connected to input/output
@@ -177,13 +173,10 @@ model {
       for(g_in in 1:G[l-1]) {
         for(g_out in 1:G[l]){
           if(use_hierarchical_w == 1){
-            if(infinite_limit[l] == 1){
-              W[l][g_in, g_out] ~ normal(0, sqrt(1.0/G[l])*1/sqrt(W_prec[l])); 
-            } else {
               W[l][g_in, g_out] ~ normal(0, 1/sqrt(W_prec[l])); 
-            }
-        } else {
-            W[l][g_in, g_out] ~ normal(0, 100);
+              W[l][g_in, g_out] ~ normal(0, 1/sqrt(W_prec[l])); 
+          } else {
+              W[l][g_in, g_out] ~ normal(0, 100);
           }
         }
       }

@@ -70,3 +70,37 @@ ggplot(df) +
         legend.position = "bottom",
         legend.title = element_blank()) + 
   xlab("")
+
+# New function (March 23rd) -----------------------------------------------
+
+fbm_gamma_params_to_stan <- function(fbm_width, fbm_alpha, N = NULL) {
+  
+  # TODO: check with Prof Neal this re-parametrization is correct.
+  
+  # if(is.null(N)){
+  #   mean_precision = 1 / (fbm_width ^ 2)
+  # } else if(fbm_alpha < 2 & !is.null(N)) {
+  #   mean_precision = (N^(2/fbm_alpha)) * 1 / (fbm_width ^ 2)
+  # } else if (fbm_alpha == 2 & !is.null(N)) {
+  #   mean_precision = (N * log(N) / (fbm_width ^ 2))
+  # } else if (fbm_alpha > 2 & !is.null(N)) {
+  #   mean_precision = (N * (fbm_alpha / fbm_alpha - 2)) / (fbm_width ^ 2)
+  # }
+  
+  mean_precision = (N) / (fbm_width^2)
+  
+  # Convert to Stan parametrization
+  
+  stan_alpha = fbm_alpha / 2
+  stan_beta = stan_alpha / mean_precision
+  
+  output = list("STAN_ALPHA" = stan_alpha,
+                "STAN_BETA" = stan_beta)
+  
+  return(output)
+  
+}
+
+args <- fbm_gamma_params_to_stan(c(0.05, 0.05), c(0.5, 0.5), 1)
+temp <- rgamma(n = 1000, shape = args[[1]], scale = 1 / args[[2]])
+hist(log10(1 / sqrt(temp)), col = "red2", main = "Weights (log10 sdev)")

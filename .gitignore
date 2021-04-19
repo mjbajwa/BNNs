@@ -6,3 +6,5 @@
 output/DEBUG/*
 output/*
 bnn_pymc3.ipynb
+python/__pycache__/*
+python/.ipynb_checkpoints/*

@@ -1,5 +1,3 @@
-# This file is to for **centered** parametrizations only
-
 # Load Libraries ----------------------------------------------------------
 
 library(dplyr)
@@ -21,11 +19,12 @@ if(centered){
   
   # Centered
   
-  stan_path <- "stan_2021_03_17_10_55_30" 
+  stan_path <- "stan_2021_03_23_16_12_10" # stan_2021_03_17_10_55_30
   python_paths <- list(
-    "NumPyro" = "numpyro_c_2021_03_17_15_45_13", 
-    "TFprobability" = "tfprob_c_2021_03_17_15_59_02", 
-    "PyMC3" = "pymc3_c_2021_03_17_17_22_26" 
+    "NumPyro: NUTS" = "numpyro_c_2021_03_23_15_14_31", 
+    "TFprobability: NUTS" = "tfprob_c_2021_03_23_11_31_12", 
+    "PyMC3: NUTS" = "pymc3_c_2021_03_23_12_40_08", 
+    "NumPyro: Gibbs-HMC" = "numpyro_c_2021_03_23_21_26_33"
   )
   
   # Additional parameters
@@ -37,11 +36,11 @@ if(centered){
 
   # Non-centered
 
-  stan_path <- "stan_2021_03_17_12_30_29" 
+  stan_path <- "stan_2021_03_23_17_33_49"  # stan_2021_03_23_17_33_49 stan_2021_03_17_12_30_29
   python_paths <- list(
-    "NumPyro" = "numpyro_nc_2021_03_17_20_29_06", 
-    "TFprobability" = "tfprob_nc_2021_03_17_20_45_22", 
-    "PyMC3" = "pymc3_nc_2021_03_17_21_21_59" 
+    "NumPyro: NUTS" = "numpyro_nc_2021_03_24_09_45_54", 
+    "TFprobability: NUTS" = "tfprob_nc_2021_03_23_15_50_40", 
+    "PyMC3: NUTS" = "pymc3_nc_2021_03_23_13_41_24" 
   )
   
   SUBTEXT <- "Non-Centered Parametrization for all models excluding Gibbs/FBM."
@@ -59,7 +58,7 @@ fbm <- read_rds(str_c("./output/", fbm_path, "/outputs.rds"))
 
 stan <- read_rds(str_c("./output/", stan_path, "/outputs.rds"))
 
-# Python frameworks
+# Python frameworks 
 
 python <- list()
 
@@ -86,7 +85,7 @@ for(model in names(python_paths)){
 # Predictions -------------------------------------------------------------
 
 df_preds_fbm <- fbm$outputs$df_predictions %>% 
-  mutate(method = "Gibbs") %>% 
+  mutate(method = "FBM: Gibbs-HMC") %>% 
   rename(mean = means,
          q10 = x10_qnt, 
          q90 = x90_qnt, 
@@ -182,7 +181,7 @@ plot_traces <- function(df, title, subtext, size = 0.15, thin = TRUE, log = FALS
 get_fbm_trace <- function(var){
   
   fbm$outputs$traces[[var]] %>% 
-    mutate(method = "Gibbs") %>% 
+    mutate(method = "FBM: Gibbs-HMC") %>% 
     select(t, method, everything()) %>% 
     tidyr::pivot_longer(!c(t, method, chain), names_to = "name")
   
@@ -341,7 +340,7 @@ path <- str_c(OUTPUT_PATH, type, folder_name)
 dir.create(path)
 
 ggsave(
-  filename = str_c(path, "/", folder_name, "_results.pdf"), 
+  filename = str_c(path, "/", folder_name, "_", type, "_results.pdf"), 
   plot = marrangeGrob(all_plots, nrow=1, ncol=1), 
   width = 15, height = 9
 )
