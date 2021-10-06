@@ -1,0 +1,62 @@
+# Static Paths
+
+OUTPUT_PATH: "./output/"
+STAN_FILE: "./stan/bnns_noncentered_log.stan"
+INPUT_TYPE: "fbm_example"
+SAVE_PLOTS: TRUE
+
+# Data Preprocessing
+
+SCALE_INPUT: FALSE
+TRAIN_FRACTION: 0.5
+
+# NN Architecture
+
+G: [8]
+INFINITE_LIMIT: [1] 
+HIERARCHICAL_FLAG_W: 1
+HIERARCHICAL_FLAG_B: 1
+
+# Priors for each layer (assumes gamma prior by default). Width and Alpha defined in the documentation
+
+PRIORS:
+  WEIGHTS:
+    WIDTH: [0.05, 0.05]
+    ALPHA: [0.5, 0.5]
+    
+  BIASES: 
+    WIDTH: [0.05, 0.05]
+    ALPHA: [0.5, 0.5]
+    
+  TARGET:
+    WIDTH: [0.05]
+    ALPHA: [0.5]
+
+# Likelihood configuration
+
+FIX_TARGET_NOISE: 0
+
+# Sample from Prior
+
+SAMPLE_FROM_PRIOR: 0 # To check for prior, set this to 1
+
+# Initiatilization of hyperparameter values (precision)
+
+INIT:
+  WEIGHTS: [1, 1]
+  BIASES: [1, 1]
+  TARGET_NOISE: [1]
+
+# MCMC Sampling from Stan
+
+MCMC_INPUTS:
+  CHAINS: 4
+  CORES: 4
+  ITER: 100000
+  BURN_IN: 10000
+  CONTROL: 
+    max_treedepth: 10 # Default is 10
+    adapt_gamma: 0.05 # Default is 0.05
+    adapt_kappa: 0.75
+    adapt_t0: 10
+    adapt_delta: 0.80 # Default is 0.8
