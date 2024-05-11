@@ -7,7 +7,7 @@ Implementations in the following packages are available:
 - Stan (centered and non-centered parametrization)
 - PyMC3
 - TF Probability
-- Pyro/PyTorch (to follow)
+- Pyro/NumPyro
 
 The results for all these packages are benchmarked against Radford Neal's **Flexible Bayesian Modelling (FBM)** implementation (the details of which can be found in his thesis). Because conditional distributions of hyperparameters given weights are analytically tractable, Neal's FBM uses Gibbs sampling to sample hyperparameters, and uses HMC for the weights and biases of the network. A set of intelligent heuristics is used to adapt the stepsize of HMC on weights and biases, while retaining the detailed balance and reversibility. 
 
